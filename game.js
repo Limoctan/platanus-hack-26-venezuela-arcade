@@ -1,7 +1,7 @@
 // Platanus Hack 26 — Batalla de Matasiete
-// Un patriota defiende la isla de Margarita. Esqueleto del casco arcade:
+// Un patriota defiende la isla de Margarita contra los Lanceros españoles:
 // flujo completo (título → partida → pausa → derrota → iniciales → mejores
-// puntuaciones), escenario árido y patriota placeholder con movimiento en 8 vías.
+// puntuaciones), combate en cuatro bordes, 3 vidas e invulnerabilidad breve.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
@@ -14,6 +14,20 @@ const PATRIOTA_SPEED = 170;
 const FIRE_INTERVAL = 200;
 const BULLET_SPEED = 460;
 const BULLET_MARGIN = 12;
+const LANCERO_SPEED = 64;
+const LANCERO_HP = 2;
+const LANCERO_SCORE = 100;
+const LANCEROS_PER_BATCH = 6;
+const BATCH_RESPAWN_MS = 1200;
+const CONTACT_RANGE = 16;
+const HIT_RANGE = 16;
+const LIVES_TOTAL = 3;
+const INVULN_MS = 2000;
+const BLINK_MS = 120;
+const KNOCK_SPEED = 400;
+const KNOCK_MS = 200;
+const SPAWN_MARGIN = 60;
+const SPAWN_OFFSET = 16;
 
 const FACING_ROTATION = {
   E: 0,
@@ -47,6 +61,9 @@ const COLORS = {
   sash: 0xc0392b,
   skin: 0xd9a066,
   hat: 0x4a3c28,
+  royalist: 0x3c5a8e,
+  royalistDark: 0x2a4066,
+  trim: 0xe8e4d8,
 };
 
 const DEFEAT_LINES = [
@@ -133,7 +150,7 @@ function create() {
 
   scene.state = {
     phase: 'loading',
-    run: { score: 0, oleada: 1, facing: 'N', nextFireAt: 0 },
+    run: freshRun(),
     highScores: [],
     saveStatus: 'Cargando puntuaciones...',
     menu: { cursor: 0, cooldown: 0, lastAxis: 0 },
@@ -151,6 +168,7 @@ function create() {
   createStage(scene);
   createPatriota(scene);
   createBullets(scene);
+  createLanceros(scene);
   createHud(scene);
   createEndGameUi(scene);
   createStartScreen(scene);
@@ -196,6 +214,13 @@ function update(time) {
   if (phase === 'playing') {
     updatePatriota(scene, time);
     updateBullets(scene);
+    updateLanceros(scene);
+    resolveBulletHits(scene);
+    checkContactDamage(scene, time);
+    if (scene.state.phase !== 'playing') {
+      return;
+    }
+    scheduleBatchRespawn(scene, time);
     if (consumeAnyPressedControl(scene, ['START1', 'START2'])) {
       pauseRun(scene);
     }
@@ -213,7 +238,11 @@ function update(time) {
   }
 
   if (phase === 'saved') {
-    if (consumeAnyPressedControl(scene, ['START1', 'START2', 'P1_1', 'P2_1'])) {
+    if (consumeAnyPressedControl(scene, ['START1', 'START2'])) {
+      startRun(scene);
+      return;
+    }
+    if (consumeAnyPressedControl(scene, ['P1_1', 'P2_1'])) {
       returnToStart(scene);
     }
   }
@@ -406,21 +435,165 @@ function updateBullets(scene) {
   }
 }
 
-function clearBullets(scene) {
-  const children = scene.bullets.getChildren().slice();
-  for (const bullet of children) {
-    bullet.destroy();
+function clearGroup(group) {
+  const children = group.getChildren().slice();
+  for (const child of children) {
+    child.destroy();
   }
 }
 
+function clearBullets(scene) {
+  clearGroup(scene.bullets);
+}
+
+// --- lanceros en escena -------------------------------------------------------
+
+function createLanceros(scene) {
+  const g = scene.add.graphics();
+
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(5, 6, 13, 12, 4);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillRect(6, 11, 11, 2);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillRoundedRect(8, 16, 5, 4, 1.5);
+
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRoundedRect(7, 2, 8, 7, 2);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(7, 8, 8, 1);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(13, 12, 5, 6);
+
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(16, 11, 9, 2);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(25, 10, 25, 13, 30, 11.5);
+
+  g.generateTexture('lancero', 30, 24);
+  g.destroy();
+
+  scene.lanceros = scene.physics.add.group();
+}
+
+function spawnLanceros(scene, count) {
+  for (let i = 0; i < count; i += 1) {
+    const point = edgeSpawnPoint(i % 4, Phaser.Math.RND.frac());
+    const lancero = scene.lanceros.create(point.x, point.y, 'lancero');
+    lancero.setDepth(4);
+    lancero.hp = LANCERO_HP;
+    lancero.kind = 'lancero';
+    lancero.body.setSize(18, 16);
+    lancero.body.setOffset(5, 4);
+    lancero.body.setAllowGravity(false);
+    lancero.body.setCollideWorldBounds(false);
+  }
+}
+
+function scheduleBatchRespawn(scene, time) {
+  const run = scene.state.run;
+  if (scene.lanceros.getLength() > 0) {
+    run.respawnAt = 0;
+    return;
+  }
+  if (!run.respawnAt) {
+    run.respawnAt = time + BATCH_RESPAWN_MS;
+    return;
+  }
+  if (time >= run.respawnAt) {
+    run.respawnAt = 0;
+    spawnLanceros(scene, LANCEROS_PER_BATCH);
+  }
+}
+
+function clearLanceros(scene) {
+  clearGroup(scene.lanceros);
+}
+
+function updateLanceros(scene) {
+  const target = scene.patriota;
+  for (const lancero of scene.lanceros.getChildren()) {
+    const direction = towardVector(lancero.x, lancero.y, target.x, target.y);
+    lancero.body.setVelocity(direction.x * LANCERO_SPEED, direction.y * LANCERO_SPEED);
+    lancero.setRotation(Math.atan2(direction.y, direction.x));
+  }
+}
+
+function flashLancero(scene, lancero) {
+  lancero.setTintFill(0xffffff);
+  scene.time.delayedCall(70, () => {
+    if (lancero.active) {
+      lancero.clearTint();
+    }
+  });
+}
+
+function resolveBulletHits(scene) {
+  const bullets = scene.bullets.getChildren();
+  const lanceros = scene.lanceros.getChildren();
+  for (let i = bullets.length - 1; i >= 0; i -= 1) {
+    const bullet = bullets[i];
+    for (let j = lanceros.length - 1; j >= 0; j -= 1) {
+      const lancero = lanceros[j];
+      if (!withinRange(bullet.x, bullet.y, lancero.x, lancero.y, HIT_RANGE)) {
+        continue;
+      }
+      bullet.destroy();
+      lancero.hp = damageAfterBullet(lancero.hp);
+      if (lancero.hp > 0) {
+        flashLancero(scene, lancero);
+        playSound(scene, 'hit');
+      } else {
+        lancero.destroy();
+        scene.state.run.score += pointsForKill(lancero.kind);
+        refreshHud(scene);
+        playSound(scene, 'kill');
+      }
+      break;
+    }
+  }
+}
+
+function checkContactDamage(scene, time) {
+  const run = scene.state.run;
+  const patriota = scene.patriota;
+  for (const lancero of scene.lanceros.getChildren()) {
+    if (!withinRange(patriota.x, patriota.y, lancero.x, lancero.y, CONTACT_RANGE)) {
+      continue;
+    }
+    const contact = applyContact(run.lives, run.invulnerableUntil, time);
+    if (!contact.hit) {
+      return false;
+    }
+    run.lives = contact.lives;
+    run.invulnerableUntil = contact.invulnerableUntil;
+    run.knock = knockbackVector(patriota.x, patriota.y);
+    run.knockUntil = time + KNOCK_MS;
+    refreshHud(scene);
+    playSound(scene, 'hurt');
+    if (isDefeated(run.lives)) {
+      finishRun(scene);
+    }
+    return true;
+  }
+  return false;
+}
+
 function updatePatriota(scene, time) {
+  const run = scene.state.run;
   const vector = getMoveVector(scene.controls);
   const body = scene.patriota.body;
-  body.setVelocity(vector.x * PATRIOTA_SPEED, vector.y * PATRIOTA_SPEED);
+  if (time < run.knockUntil) {
+    body.setVelocity(run.knock.x * KNOCK_SPEED, run.knock.y * KNOCK_SPEED);
+  } else {
+    body.setVelocity(vector.x * PATRIOTA_SPEED, vector.y * PATRIOTA_SPEED);
+  }
 
-  const run = scene.state.run;
   run.facing = nextFacing(run.facing, vector);
   scene.patriota.setRotation(facingRotation(run.facing));
+
+  const invulnerable = isInvulnerable(time, run.invulnerableUntil);
+  scene.patriota.setVisible(!invulnerable || blinkVisible(time));
 
   const shot = fireTick(isFiring(scene.controls), time, run.nextFireAt);
   run.nextFireAt = shot.nextFireAt;
@@ -496,6 +669,73 @@ function bulletOutOfBounds(x, y) {
   );
 }
 
+// --- lanceros, vidas y derrota (lógica pura) ---------------------------------
+
+function towardVector(fromX, fromY, toX, toY) {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  if (dx === 0 && dy === 0) {
+    return { x: 0, y: 0 };
+  }
+  const length = Math.hypot(dx, dy);
+  return { x: dx / length, y: dy / length };
+}
+
+function edgeSpawnPoint(edge, t) {
+  const u = Math.max(0, Math.min(1, t));
+  if (edge === 0) {
+    return { x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN), y: -SPAWN_OFFSET };
+  }
+  if (edge === 1) {
+    return { x: GAME_WIDTH + SPAWN_OFFSET, y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN) };
+  }
+  if (edge === 2) {
+    return { x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN), y: GAME_HEIGHT + SPAWN_OFFSET };
+  }
+  return { x: -SPAWN_OFFSET, y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN) };
+}
+
+function damageAfterBullet(hp) {
+  return Math.max(0, hp - 1);
+}
+
+function pointsForKill(kind) {
+  return kind === 'lancero' ? LANCERO_SCORE : 0;
+}
+
+function withinRange(x1, y1, x2, y2, range) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return dx * dx + dy * dy <= range * range;
+}
+
+function applyContact(lives, invulnerableUntil, now) {
+  if (now < invulnerableUntil) {
+    return { lives, invulnerableUntil, hit: false };
+  }
+  return {
+    lives: Math.max(0, lives - 1),
+    invulnerableUntil: now + INVULN_MS,
+    hit: true,
+  };
+}
+
+function isInvulnerable(now, until) {
+  return now < until;
+}
+
+function blinkVisible(now) {
+  return now % BLINK_MS < BLINK_MS / 2;
+}
+
+function knockbackVector(x, y) {
+  return towardVector(x, y, GAME_WIDTH / 2, GAME_HEIGHT / 2);
+}
+
+function isDefeated(lives) {
+  return lives <= 0;
+}
+
 // --- HUD ----------------------------------------------------------------------
 
 function createHud(scene) {
@@ -508,6 +748,16 @@ function createHud(scene) {
       color: '#f2c14e',
       fontStyle: 'bold',
     })
+    .setDepth(10);
+
+  scene.hud.lives = scene.add
+    .text(GAME_WIDTH / 2, 22, 'VIDAS 3', {
+      fontFamily: 'monospace',
+      fontSize: '22px',
+      color: '#c0392b',
+      fontStyle: 'bold',
+    })
+    .setOrigin(0.5, 0)
     .setDepth(10);
 
   scene.hud.oleada = scene.add
@@ -533,6 +783,7 @@ function createHud(scene) {
 
 function refreshHud(scene) {
   scene.hud.score.setText(`PUNTOS ${String(scene.state.run.score).padStart(4, '0')}`);
+  scene.hud.lives.setText(`VIDAS ${scene.state.run.lives}`);
   scene.hud.oleada.setText(`OLEADA ${String(scene.state.run.oleada).padStart(2, '0')}`);
 }
 
@@ -564,14 +815,30 @@ function showOleadaSplash(scene, oleada) {
 
 // --- flujo de partida ---------------------------------------------------------
 
+function freshRun() {
+  return {
+    score: 0,
+    oleada: 1,
+    facing: 'N',
+    nextFireAt: 0,
+    lives: LIVES_TOTAL,
+    invulnerableUntil: 0,
+    knock: { x: 0, y: 0 },
+    knockUntil: 0,
+    respawnAt: 0,
+  };
+}
+
 function startRun(scene) {
   scene.startScreen.container.setVisible(false);
   scene.endGame.container.setVisible(false);
   scene.pauseScreen.container.setVisible(false);
   clearPressedControls(scene);
 
-  scene.state.run = { score: 0, oleada: 1, facing: 'N', nextFireAt: 0 };
+  scene.state.run = freshRun();
   clearBullets(scene);
+  clearLanceros(scene);
+  spawnLanceros(scene, LANCEROS_PER_BATCH);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   scene.patriota.setRotation(facingRotation('N'));
   scene.patriota.setActive(true).setVisible(true);
@@ -608,7 +875,9 @@ function finishRun(scene) {
 
   scene.pauseScreen.container.setVisible(false);
   scene.patriota.body.setVelocity(0, 0);
+  scene.patriota.setVisible(true);
   clearBullets(scene);
+  clearLanceros(scene);
   scene.physics.pause();
   clearPressedControls(scene);
   scene.state.phase = 'gameover';
@@ -1321,7 +1590,7 @@ function submitHighScore(scene) {
     savedAt: new Date().toISOString().slice(0, 10),
   };
 
-  scene.state.saveStatus = `¡Guardado ${initials}! Pulsa START para otra partida.`;
+  scene.state.saveStatus = `¡Guardado ${initials}! START: OTRA PARTIDA · BOTÓN 1: TÍTULO`;
   scene.endGame.saveStatus.setText(scene.state.saveStatus);
   clearPressedControls(scene);
   scene.state.phase = 'saved';
@@ -1559,6 +1828,30 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.start(now);
       osc.stop(now + 0.09);
+    } else if (type === 'hit') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(500, now);
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.05);
+      gain.gain.setValueAtTime(0.07, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now);
+      osc.stop(now + 0.06);
+    } else if (type === 'kill') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.16);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } else if (type === 'hurt') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      osc.start(now);
+      osc.stop(now + 0.24);
     } else if (type === 'defeat') {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(330, now);
