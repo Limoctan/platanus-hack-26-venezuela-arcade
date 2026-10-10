@@ -11,6 +11,20 @@ const WINNING_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 8;
 const MAX_SCORE = 1e9;
 const PATRIOTA_SPEED = 170;
+const FIRE_INTERVAL = 200;
+const BULLET_SPEED = 460;
+const BULLET_MARGIN = 12;
+
+const FACING_ROTATION = {
+  E: 0,
+  SE: Math.PI / 4,
+  S: Math.PI / 2,
+  SW: (3 * Math.PI) / 4,
+  W: Math.PI,
+  NW: (-3 * Math.PI) / 4,
+  N: -Math.PI / 2,
+  NE: -Math.PI / 4,
+};
 
 const COLORS = {
   sand: 0xcdb276,
@@ -119,7 +133,7 @@ function create() {
 
   scene.state = {
     phase: 'loading',
-    run: { score: 0, oleada: 1 },
+    run: { score: 0, oleada: 1, facing: 'N', nextFireAt: 0 },
     highScores: [],
     saveStatus: 'Cargando puntuaciones...',
     menu: { cursor: 0, cooldown: 0, lastAxis: 0 },
@@ -136,6 +150,7 @@ function create() {
 
   createStage(scene);
   createPatriota(scene);
+  createBullets(scene);
   createHud(scene);
   createEndGameUi(scene);
   createStartScreen(scene);
@@ -179,7 +194,8 @@ function update(time) {
   }
 
   if (phase === 'playing') {
-    updatePatriota(scene);
+    updatePatriota(scene, time);
+    updateBullets(scene);
     if (consumeAnyPressedControl(scene, ['START1', 'START2'])) {
       pauseRun(scene);
     }
@@ -318,39 +334,100 @@ function drawCactus(g, x, y, rng) {
 function createPatriota(scene) {
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.hat, 1);
-  g.fillEllipse(10, 7, 14, 4);
-  g.fillRoundedRect(6, 2, 8, 5, 2);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillCircle(10, 10, 4);
   g.fillStyle(COLORS.patriota, 1);
-  g.fillRoundedRect(5, 13, 10, 9, 2);
+  g.fillRoundedRect(5, 6, 13, 12, 4);
   g.fillStyle(COLORS.sash, 1);
-  g.fillRect(5, 17, 10, 2);
+  g.fillRect(6, 11, 11, 3);
   g.fillStyle(COLORS.skin, 1);
-  g.fillRect(3, 14, 2, 6);
-  g.fillRect(15, 14, 2, 6);
-  g.fillStyle(COLORS.hat, 1);
-  g.fillRect(6, 21, 3, 3);
-  g.fillRect(11, 21, 3, 3);
+  g.fillRoundedRect(8, 4, 5, 4, 1.5);
+  g.fillRoundedRect(8, 16, 5, 4, 1.5);
 
-  g.generateTexture('patriota', 20, 24);
+  g.fillStyle(COLORS.hat, 1);
+  g.fillCircle(11, 12, 5);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(13, 12, 5, 6);
+
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(15, 11, 8, 2);
+  g.fillStyle(0xcfc7b2, 1);
+  g.fillCircle(22, 12, 1.5);
+
+  g.generateTexture('patriota', 24, 24);
   g.destroy();
 
   const patriota = scene.add.sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'patriota').setDepth(5);
   scene.physics.add.existing(patriota);
-  patriota.body.setSize(12, 14);
-  patriota.body.setOffset(4, 8);
+  patriota.body.setSize(14, 14);
+  patriota.body.setOffset(5, 5);
   patriota.body.setAllowGravity(false);
   patriota.body.setCollideWorldBounds(true);
   patriota.body.setBounce(0, 0);
+  patriota.setRotation(facingRotation('N'));
   scene.patriota = patriota;
 }
 
-function updatePatriota(scene) {
+function createBullets(scene) {
+  const g = scene.add.graphics();
+  g.fillStyle(COLORS.frame, 1);
+  g.fillEllipse(8, 6, 16, 8);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillEllipse(8, 6, 13, 5);
+  g.fillStyle(0xfdf6e3, 1);
+  g.fillEllipse(10, 5.5, 6, 2.6);
+  g.generateTexture('bala', 16, 12);
+  g.destroy();
+
+  scene.bullets = scene.physics.add.group();
+}
+
+function fireBullet(scene) {
+  const facing = scene.state.run.facing;
+  const direction = facingVector(facing);
+  const bullet = scene.bullets.create(
+    scene.patriota.x + direction.x * 20,
+    scene.patriota.y + direction.y * 20,
+    'bala',
+  );
+  if (!bullet) {
+    return;
+  }
+  bullet.setDepth(6);
+  bullet.setRotation(facingRotation(facing));
+  bullet.body.setAllowGravity(false);
+  bullet.body.setVelocity(direction.x * BULLET_SPEED, direction.y * BULLET_SPEED);
+}
+
+function updateBullets(scene) {
+  const children = scene.bullets.getChildren();
+  for (let i = children.length - 1; i >= 0; i -= 1) {
+    if (bulletOutOfBounds(children[i].x, children[i].y)) {
+      children[i].destroy();
+    }
+  }
+}
+
+function clearBullets(scene) {
+  const children = scene.bullets.getChildren().slice();
+  for (const bullet of children) {
+    bullet.destroy();
+  }
+}
+
+function updatePatriota(scene, time) {
   const vector = getMoveVector(scene.controls);
   const body = scene.patriota.body;
   body.setVelocity(vector.x * PATRIOTA_SPEED, vector.y * PATRIOTA_SPEED);
+
+  const run = scene.state.run;
+  run.facing = nextFacing(run.facing, vector);
+  scene.patriota.setRotation(facingRotation(run.facing));
+
+  const shot = fireTick(isFiring(scene.controls), time, run.nextFireAt);
+  run.nextFireAt = shot.nextFireAt;
+  if (shot.fire) {
+    fireBullet(scene);
+    playSound(scene, 'shot');
+  }
 }
 
 function getMoveVector(controls) {
@@ -365,6 +442,58 @@ function getMoveVector(controls) {
     y *= Math.SQRT1_2;
   }
   return { x, y };
+}
+
+function facingFromVector(vector) {
+  const x = vector.x;
+  const y = vector.y;
+  if (x === 0 && y === 0) {
+    return null;
+  }
+  if (y === 0) {
+    return x > 0 ? 'E' : 'W';
+  }
+  if (x === 0) {
+    return y > 0 ? 'S' : 'N';
+  }
+  if (x > 0) {
+    return y > 0 ? 'SE' : 'NE';
+  }
+  return y > 0 ? 'SW' : 'NW';
+}
+
+function nextFacing(facing, vector) {
+  return facingFromVector(vector) || facing;
+}
+
+function facingRotation(facing) {
+  const rotation = FACING_ROTATION[facing];
+  return rotation === undefined ? 0 : rotation;
+}
+
+function facingVector(facing) {
+  const rotation = facingRotation(facing);
+  return { x: Math.cos(rotation), y: Math.sin(rotation) };
+}
+
+function isFiring(controls) {
+  return Boolean(controls.held.P1_1 || controls.held.P2_1);
+}
+
+function fireTick(held, now, nextFireAt) {
+  if (!held || now < nextFireAt) {
+    return { fire: false, nextFireAt };
+  }
+  return { fire: true, nextFireAt: now + FIRE_INTERVAL };
+}
+
+function bulletOutOfBounds(x, y) {
+  return (
+    x < -BULLET_MARGIN ||
+    x > GAME_WIDTH + BULLET_MARGIN ||
+    y < -BULLET_MARGIN ||
+    y > GAME_HEIGHT + BULLET_MARGIN
+  );
 }
 
 // --- HUD ----------------------------------------------------------------------
@@ -441,12 +570,14 @@ function startRun(scene) {
   scene.pauseScreen.container.setVisible(false);
   clearPressedControls(scene);
 
-  scene.state.run = { score: 0, oleada: 1 };
+  scene.state.run = { score: 0, oleada: 1, facing: 'N', nextFireAt: 0 };
+  clearBullets(scene);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
+  scene.patriota.setRotation(facingRotation('N'));
   scene.patriota.setActive(true).setVisible(true);
 
   refreshHud(scene);
-  scene.hud.status.setText('START: PAUSA');
+  scene.hud.status.setText('BOTÓN 1: DISPARAR   START: PAUSA');
   scene.state.phase = 'playing';
   scene.physics.resume();
   showOleadaSplash(scene, 1);
@@ -477,6 +608,7 @@ function finishRun(scene) {
 
   scene.pauseScreen.container.setVisible(false);
   scene.patriota.body.setVelocity(0, 0);
+  clearBullets(scene);
   scene.physics.pause();
   clearPressedControls(scene);
   scene.state.phase = 'gameover';
@@ -819,6 +951,10 @@ function createControlsScreen(scene) {
     'JOYSTICK ....... MOVER · ELEGIR',
     'BOTÓN 1 ........ CONFIRMAR',
     'START .......... PAUSA · COMENZAR',
+    '',
+    'EN COMBATE',
+    'JOYSTICK ....... MOVER · MIRAR',
+    'BOTÓN 1 ........ DISPARAR (SOSTENER)',
     '',
     'EN PAUSA',
     'JOYSTICK ....... ELEGIR OPCIÓN',
@@ -1415,6 +1551,14 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
       osc.start(now);
       osc.stop(now + 0.34);
+    } else if (type === 'shot') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(920, now);
+      osc.frequency.exponentialRampToValueAtTime(160, now + 0.07);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.start(now);
+      osc.stop(now + 0.09);
     } else if (type === 'defeat') {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(330, now);
