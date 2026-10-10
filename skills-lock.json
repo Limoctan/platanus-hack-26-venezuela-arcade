@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "phaser-gdd": {
+      "source": "yakoub-ai/phaser4-gamedev",
+      "sourceType": "github",
+      "skillPath": "skills/phaser-gdd/SKILL.md",
+      "computedHash": "acc0ff23f3f3be5a016b1e7aaa0077cf1e0b7a562aad1d9c8b755720bf3f45c6"
+    }
+  }
+}

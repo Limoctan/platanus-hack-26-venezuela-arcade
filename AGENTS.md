@@ -109,3 +109,17 @@ await window.platanusArcadeStorage.remove('my-key');
 5. **Let the user test**: The user will run `npm run dev` when they want to test - focus on building the game
 
 Good luck building an amazing arcade game! <�
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles with default label names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
