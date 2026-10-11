@@ -483,6 +483,9 @@ function spawnLanceros(scene, count) {
     lancero.setDepth(4);
     lancero.hp = LANCERO_HP;
     lancero.kind = 'lancero';
+    lancero.facing = facingFromVector(
+      towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
+    );
     lancero.body.setSize(18, 16);
     lancero.body.setOffset(5, 4);
     lancero.body.setAllowGravity(false);
@@ -515,7 +518,8 @@ function updateLanceros(scene) {
   for (const lancero of scene.lanceros.getChildren()) {
     const direction = towardVector(lancero.x, lancero.y, target.x, target.y);
     lancero.body.setVelocity(direction.x * LANCERO_SPEED, direction.y * LANCERO_SPEED);
-    lancero.setRotation(Math.atan2(direction.y, direction.x));
+    lancero.facing = nextFacing(lancero.facing, direction);
+    lancero.setRotation(facingRotation(lancero.facing));
   }
 }
 
