@@ -5,7 +5,7 @@
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
-const STORAGE_KEY = 'batalla-matasiete-highscores';
+const STORAGE_KEY = "batalla-matasiete-highscores";
 const MAX_HIGH_SCORES = 5;
 const WINNING_NAME_LENGTH = 3;
 const MAX_NAME_LENGTH = 8;
@@ -67,45 +67,45 @@ const COLORS = {
 };
 
 const DEFEAT_LINES = [
-  '¡La isla aún resiste, patriota!',
-  '¡No dejes que Matasiete caiga!',
-  '¡Margarita cuenta contigo!',
-  '¡Aún queda lucha en la montaña!',
+  "¡La isla aún resiste, patriota!",
+  "¡No dejes que Matasiete caiga!",
+  "¡Margarita cuenta contigo!",
+  "¡Aún queda lucha en la montaña!",
 ];
 
 const LETTER_GRID = [
-  ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
-  ['H', 'I', 'J', 'K', 'L', 'M', 'N'],
-  ['O', 'P', 'Q', 'R', 'S', 'T', 'U'],
-  ['V', 'W', 'X', 'Y', 'Z', '.', '-'],
-  ['BORRAR', 'LISTO'],
+  ["A", "B", "C", "D", "E", "F", "G"],
+  ["H", "I", "J", "K", "L", "M", "N"],
+  ["O", "P", "Q", "R", "S", "T", "U"],
+  ["V", "W", "X", "Y", "Z", ".", "-"],
+  ["BORRAR", "LISTO"],
 ];
 
 // DO NOT replace existing keys — they match the physical arcade cabinet wiring.
 // To add local testing shortcuts, append extra keys to any array.
 const CABINET_KEYS = {
-  P1_U: ['w'],
-  P1_D: ['s'],
-  P1_L: ['a'],
-  P1_R: ['d'],
-  P1_1: ['u'],
-  P1_2: ['i'],
-  P1_3: ['o'],
-  P1_4: ['j'],
-  P1_5: ['k'],
-  P1_6: ['l'],
-  P2_U: ['ArrowUp'],
-  P2_D: ['ArrowDown'],
-  P2_L: ['ArrowLeft'],
-  P2_R: ['ArrowRight'],
-  P2_1: ['r'],
-  P2_2: ['t'],
-  P2_3: ['y'],
-  P2_4: ['f'],
-  P2_5: ['g'],
-  P2_6: ['h'],
-  START1: ['Enter'],
-  START2: ['2'],
+  P1_U: ["w"],
+  P1_D: ["s"],
+  P1_L: ["a"],
+  P1_R: ["d"],
+  P1_1: ["u"],
+  P1_2: ["i"],
+  P1_3: ["o"],
+  P1_4: ["j"],
+  P1_5: ["k"],
+  P1_6: ["l"],
+  P2_U: ["ArrowUp"],
+  P2_D: ["ArrowDown"],
+  P2_L: ["ArrowLeft"],
+  P2_R: ["ArrowRight"],
+  P2_1: ["r"],
+  P2_2: ["t"],
+  P2_3: ["y"],
+  P2_4: ["f"],
+  P2_5: ["g"],
+  P2_6: ["h"],
+  START1: ["Enter"],
+  START2: ["2"],
 };
 
 const KEYBOARD_TO_ARCADE = {};
@@ -119,10 +119,10 @@ const config = {
   type: Phaser.AUTO,
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  parent: 'game-root',
-  backgroundColor: '#cdb276',
+  parent: "game-root",
+  backgroundColor: "#cdb276",
   physics: {
-    default: 'arcade',
+    default: "arcade",
     arcade: {
       gravity: { y: 0 },
       debug: false,
@@ -149,10 +149,10 @@ function create() {
   const scene = this;
 
   scene.state = {
-    phase: 'loading',
+    phase: "loading",
     run: freshRun(),
     highScores: [],
-    saveStatus: 'Cargando puntuaciones...',
+    saveStatus: "Cargando puntuaciones...",
     menu: { cursor: 0, cooldown: 0, lastAxis: 0 },
     pauseMenu: { cursor: 0, cooldown: 0, lastAxis: 0 },
     nameEntry: {
@@ -181,12 +181,14 @@ function create() {
   loadHighScores()
     .then((highScores) => {
       scene.state.highScores = highScores;
-      scene.state.saveStatus = 'Termina una partida para registrar tu puntuación.';
+      scene.state.saveStatus =
+        "Termina una partida para registrar tu puntuación.";
       refreshAllLeaderboards(scene);
     })
     .catch(() => {
       scene.state.highScores = [];
-      scene.state.saveStatus = 'Almacenamiento no disponible. Se juega sin guardar.';
+      scene.state.saveStatus =
+        "Almacenamiento no disponible. Se juega sin guardar.";
       refreshAllLeaderboards(scene);
     });
 }
@@ -199,50 +201,59 @@ function update(time) {
 
   const phase = scene.state.phase;
 
-  if (phase === 'start') {
+  if (phase === "start") {
     handleStartMenu(scene, time);
     return;
   }
 
-  if (phase === 'leaderboard' || phase === 'controls') {
-    if (consumeAnyPressedControl(scene, ['START1', 'START2', 'P1_1', 'P2_1', 'P1_2', 'P2_2'])) {
+  if (phase === "leaderboard" || phase === "controls") {
+    if (
+      consumeAnyPressedControl(scene, [
+        "START1",
+        "START2",
+        "P1_1",
+        "P2_1",
+        "P1_2",
+        "P2_2",
+      ])
+    ) {
       closeAttractScreen(scene);
     }
     return;
   }
 
-  if (phase === 'playing') {
+  if (phase === "playing") {
     updatePatriota(scene, time);
     updateBullets(scene);
     updateLanceros(scene);
     resolveBulletHits(scene);
     checkContactDamage(scene, time);
-    if (scene.state.phase !== 'playing') {
+    if (scene.state.phase !== "playing") {
       return;
     }
     scheduleBatchRespawn(scene, time);
-    if (consumeAnyPressedControl(scene, ['START1', 'START2'])) {
+    if (consumeAnyPressedControl(scene, ["START1", "START2"])) {
       pauseRun(scene);
     }
     return;
   }
 
-  if (phase === 'paused') {
+  if (phase === "paused") {
     handlePauseMenu(scene, time);
     return;
   }
 
-  if (phase === 'gameover') {
+  if (phase === "gameover") {
     handleNameEntry(scene, time);
     return;
   }
 
-  if (phase === 'saved') {
-    if (consumeAnyPressedControl(scene, ['START1', 'START2'])) {
+  if (phase === "saved") {
+    if (consumeAnyPressedControl(scene, ["START1", "START2"])) {
       startRun(scene);
       return;
     }
-    if (consumeAnyPressedControl(scene, ['P1_1', 'P2_1'])) {
+    if (consumeAnyPressedControl(scene, ["P1_1", "P2_1"])) {
       returnToStart(scene);
     }
   }
@@ -281,8 +292,12 @@ function createStage(scene) {
   g.fillStyle(COLORS.mountain, 1);
   for (let i = 0; i < 26; i += 1) {
     const edge = rng.integerInRange(0, 3);
-    const along = rng.integerInRange(70, edge % 2 === 0 ? GAME_HEIGHT - 70 : GAME_WIDTH - 70);
-    const x = edge === 0 || edge === 2 ? along : edge === 1 ? 52 : GAME_WIDTH - 52;
+    const along = rng.integerInRange(
+      70,
+      edge % 2 === 0 ? GAME_HEIGHT - 70 : GAME_WIDTH - 70,
+    );
+    const x =
+      edge === 0 || edge === 2 ? along : edge === 1 ? 52 : GAME_WIDTH - 52;
     const y = edge === 0 ? 52 : edge === 2 ? GAME_HEIGHT - 52 : along;
     g.fillEllipse(x, y, rng.integerInRange(18, 40), rng.integerInRange(12, 26));
   }
@@ -320,14 +335,24 @@ function createStage(scene) {
   for (let i = 0; i < 14; i += 1) {
     const spot = safeSpot(rng);
     g.fillStyle(COLORS.olive, 0.85);
-    g.fillEllipse(spot.x, spot.y, rng.integerInRange(10, 22), rng.integerInRange(6, 12));
+    g.fillEllipse(
+      spot.x,
+      spot.y,
+      rng.integerInRange(10, 22),
+      rng.integerInRange(6, 12),
+    );
     g.fillStyle(COLORS.oliveDark, 0.7);
-    g.fillEllipse(spot.x + 3, spot.y + 2, rng.integerInRange(6, 12), rng.integerInRange(4, 8));
+    g.fillEllipse(
+      spot.x + 3,
+      spot.y + 2,
+      rng.integerInRange(6, 12),
+      rng.integerInRange(4, 8),
+    );
   }
 
-  g.generateTexture('escenario', GAME_WIDTH, GAME_HEIGHT);
+  g.generateTexture("escenario", GAME_WIDTH, GAME_HEIGHT);
   g.destroy();
-  scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'escenario').setDepth(0);
+  scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "escenario").setDepth(0);
 }
 
 function safeSpot(rng) {
@@ -381,17 +406,19 @@ function createPatriota(scene) {
   g.fillStyle(0xcfc7b2, 1);
   g.fillCircle(22, 12, 1.5);
 
-  g.generateTexture('patriota', 24, 24);
+  g.generateTexture("patriota", 24, 24);
   g.destroy();
 
-  const patriota = scene.add.sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'patriota').setDepth(5);
+  const patriota = scene.add
+    .sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, "patriota")
+    .setDepth(5);
   scene.physics.add.existing(patriota);
   patriota.body.setSize(14, 14);
   patriota.body.setOffset(5, 5);
   patriota.body.setAllowGravity(false);
   patriota.body.setCollideWorldBounds(true);
   patriota.body.setBounce(0, 0);
-  patriota.setRotation(facingRotation('N'));
+  patriota.setRotation(facingRotation("N"));
   scene.patriota = patriota;
 }
 
@@ -403,7 +430,7 @@ function createBullets(scene) {
   g.fillEllipse(8, 6, 13, 5);
   g.fillStyle(0xfdf6e3, 1);
   g.fillEllipse(10, 5.5, 6, 2.6);
-  g.generateTexture('bala', 16, 12);
+  g.generateTexture("bala", 16, 12);
   g.destroy();
 
   scene.bullets = scene.physics.add.group();
@@ -415,7 +442,7 @@ function fireBullet(scene) {
   const bullet = scene.bullets.create(
     scene.patriota.x + direction.x * 20,
     scene.patriota.y + direction.y * 20,
-    'bala',
+    "bala",
   );
   if (!bullet) {
     return;
@@ -423,7 +450,10 @@ function fireBullet(scene) {
   bullet.setDepth(6);
   bullet.setRotation(facingRotation(facing));
   bullet.body.setAllowGravity(false);
-  bullet.body.setVelocity(direction.x * BULLET_SPEED, direction.y * BULLET_SPEED);
+  bullet.body.setVelocity(
+    direction.x * BULLET_SPEED,
+    direction.y * BULLET_SPEED,
+  );
 }
 
 function updateBullets(scene) {
@@ -470,7 +500,7 @@ function createLanceros(scene) {
   g.fillStyle(COLORS.trim, 1);
   g.fillTriangle(25, 10, 25, 13, 30, 11.5);
 
-  g.generateTexture('lancero', 30, 24);
+  g.generateTexture("lancero", 30, 24);
   g.destroy();
 
   scene.lanceros = scene.physics.add.group();
@@ -479,10 +509,10 @@ function createLanceros(scene) {
 function spawnLanceros(scene, count) {
   for (let i = 0; i < count; i += 1) {
     const point = edgeSpawnPoint(i % 4, Phaser.Math.RND.frac());
-    const lancero = scene.lanceros.create(point.x, point.y, 'lancero');
+    const lancero = scene.lanceros.create(point.x, point.y, "lancero");
     lancero.setDepth(4);
     lancero.hp = LANCERO_HP;
-    lancero.kind = 'lancero';
+    lancero.kind = "lancero";
     lancero.facing = facingFromVector(
       towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
     );
@@ -517,7 +547,10 @@ function updateLanceros(scene) {
   const target = scene.patriota;
   for (const lancero of scene.lanceros.getChildren()) {
     const direction = towardVector(lancero.x, lancero.y, target.x, target.y);
-    lancero.body.setVelocity(direction.x * LANCERO_SPEED, direction.y * LANCERO_SPEED);
+    lancero.body.setVelocity(
+      direction.x * LANCERO_SPEED,
+      direction.y * LANCERO_SPEED,
+    );
     lancero.facing = nextFacing(lancero.facing, direction);
     lancero.setRotation(facingRotation(lancero.facing));
   }
@@ -546,12 +579,12 @@ function resolveBulletHits(scene) {
       lancero.hp = damageAfterBullet(lancero.hp);
       if (lancero.hp > 0) {
         flashLancero(scene, lancero);
-        playSound(scene, 'hit');
+        playSound(scene, "hit");
       } else {
         lancero.destroy();
         scene.state.run.score += pointsForKill(lancero.kind);
         refreshHud(scene);
-        playSound(scene, 'kill');
+        playSound(scene, "kill");
       }
       break;
     }
@@ -562,7 +595,9 @@ function checkContactDamage(scene, time) {
   const run = scene.state.run;
   const patriota = scene.patriota;
   for (const lancero of scene.lanceros.getChildren()) {
-    if (!withinRange(patriota.x, patriota.y, lancero.x, lancero.y, CONTACT_RANGE)) {
+    if (
+      !withinRange(patriota.x, patriota.y, lancero.x, lancero.y, CONTACT_RANGE)
+    ) {
       continue;
     }
     const contact = applyContact(run.lives, run.invulnerableUntil, time);
@@ -574,7 +609,7 @@ function checkContactDamage(scene, time) {
     run.knock = knockbackVector(patriota.x, patriota.y);
     run.knockUntil = time + KNOCK_MS;
     refreshHud(scene);
-    playSound(scene, 'hurt');
+    playSound(scene, "hurt");
     if (isDefeated(run.lives)) {
       finishRun(scene);
     }
@@ -603,7 +638,7 @@ function updatePatriota(scene, time) {
   run.nextFireAt = shot.nextFireAt;
   if (shot.fire) {
     fireBullet(scene);
-    playSound(scene, 'shot');
+    playSound(scene, "shot");
   }
 }
 
@@ -624,19 +659,20 @@ function getMoveVector(controls) {
 function facingFromVector(vector) {
   const x = vector.x;
   const y = vector.y;
+  console.log("facingFromVector", vector, x, y);
   if (x === 0 && y === 0) {
     return null;
   }
   if (y === 0) {
-    return x > 0 ? 'E' : 'W';
+    return x > 0 ? "E" : "W";
   }
   if (x === 0) {
-    return y > 0 ? 'S' : 'N';
+    return y > 0 ? "S" : "N";
   }
   if (x > 0) {
-    return y > 0 ? 'SE' : 'NE';
+    return y > 0 ? "SE" : "NE";
   }
-  return y > 0 ? 'SW' : 'NW';
+  return y > 0 ? "SW" : "NW";
 }
 
 function nextFacing(facing, vector) {
@@ -688,15 +724,27 @@ function towardVector(fromX, fromY, toX, toY) {
 function edgeSpawnPoint(edge, t) {
   const u = Math.max(0, Math.min(1, t));
   if (edge === 0) {
-    return { x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN), y: -SPAWN_OFFSET };
+    return {
+      x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN),
+      y: -SPAWN_OFFSET,
+    };
   }
   if (edge === 1) {
-    return { x: GAME_WIDTH + SPAWN_OFFSET, y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN) };
+    return {
+      x: GAME_WIDTH + SPAWN_OFFSET,
+      y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN),
+    };
   }
   if (edge === 2) {
-    return { x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN), y: GAME_HEIGHT + SPAWN_OFFSET };
+    return {
+      x: SPAWN_MARGIN + u * (GAME_WIDTH - 2 * SPAWN_MARGIN),
+      y: GAME_HEIGHT + SPAWN_OFFSET,
+    };
   }
-  return { x: -SPAWN_OFFSET, y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN) };
+  return {
+    x: -SPAWN_OFFSET,
+    y: SPAWN_MARGIN + u * (GAME_HEIGHT - 2 * SPAWN_MARGIN),
+  };
 }
 
 function damageAfterBullet(hp) {
@@ -704,7 +752,7 @@ function damageAfterBullet(hp) {
 }
 
 function pointsForKill(kind) {
-  return kind === 'lancero' ? LANCERO_SCORE : 0;
+  return kind === "lancero" ? LANCERO_SCORE : 0;
 }
 
 function withinRange(x1, y1, x2, y2, range) {
@@ -746,59 +794,63 @@ function createHud(scene) {
   scene.hud = {};
 
   scene.hud.score = scene.add
-    .text(28, 22, 'PUNTOS 0000', {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      color: '#f2c14e',
-      fontStyle: 'bold',
+    .text(28, 22, "PUNTOS 0000", {
+      fontFamily: "monospace",
+      fontSize: "22px",
+      color: "#f2c14e",
+      fontStyle: "bold",
     })
     .setDepth(10);
 
   scene.hud.lives = scene.add
-    .text(GAME_WIDTH / 2, 22, 'VIDAS 3', {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      color: '#c0392b',
-      fontStyle: 'bold',
+    .text(GAME_WIDTH / 2, 22, "VIDAS 3", {
+      fontFamily: "monospace",
+      fontSize: "22px",
+      color: "#c0392b",
+      fontStyle: "bold",
     })
     .setOrigin(0.5, 0)
     .setDepth(10);
 
   scene.hud.oleada = scene.add
-    .text(GAME_WIDTH - 28, 22, 'OLEADA 01', {
-      fontFamily: 'monospace',
-      fontSize: '22px',
-      color: '#f2ead0',
-      fontStyle: 'bold',
+    .text(GAME_WIDTH - 28, 22, "OLEADA 01", {
+      fontFamily: "monospace",
+      fontSize: "22px",
+      color: "#f2ead0",
+      fontStyle: "bold",
     })
     .setOrigin(1, 0)
     .setDepth(10);
 
   scene.hud.status = scene.add
-    .text(GAME_WIDTH / 2, GAME_HEIGHT - 20, '', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f2ead0',
-      align: 'center',
+    .text(GAME_WIDTH / 2, GAME_HEIGHT - 20, "", {
+      fontFamily: "monospace",
+      fontSize: "13px",
+      color: "#f2ead0",
+      align: "center",
     })
     .setOrigin(0.5)
     .setDepth(10);
 }
 
 function refreshHud(scene) {
-  scene.hud.score.setText(`PUNTOS ${String(scene.state.run.score).padStart(4, '0')}`);
+  scene.hud.score.setText(
+    `PUNTOS ${String(scene.state.run.score).padStart(4, "0")}`,
+  );
   scene.hud.lives.setText(`VIDAS ${scene.state.run.lives}`);
-  scene.hud.oleada.setText(`OLEADA ${String(scene.state.run.oleada).padStart(2, '0')}`);
+  scene.hud.oleada.setText(
+    `OLEADA ${String(scene.state.run.oleada).padStart(2, "0")}`,
+  );
 }
 
 function showOleadaSplash(scene, oleada) {
   const splash = scene.add
     .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, `¡OLEADA ${oleada}!`, {
-      fontFamily: 'monospace',
-      fontSize: '44px',
-      color: '#f2c14e',
-      fontStyle: 'bold',
-      stroke: '#584b34',
+      fontFamily: "monospace",
+      fontSize: "44px",
+      color: "#f2c14e",
+      fontStyle: "bold",
+      stroke: "#584b34",
       strokeThickness: 6,
     })
     .setOrigin(0.5)
@@ -823,7 +875,7 @@ function freshRun() {
   return {
     score: 0,
     oleada: 1,
-    facing: 'N',
+    facing: "N",
     nextFireAt: 0,
     lives: LIVES_TOTAL,
     invulnerableUntil: 0,
@@ -844,20 +896,20 @@ function startRun(scene) {
   clearLanceros(scene);
   spawnLanceros(scene, LANCEROS_PER_BATCH);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
-  scene.patriota.setRotation(facingRotation('N'));
+  scene.patriota.setRotation(facingRotation("N"));
   scene.patriota.setActive(true).setVisible(true);
 
   refreshHud(scene);
-  scene.hud.status.setText('BOTÓN 1: DISPARAR   START: PAUSA');
-  scene.state.phase = 'playing';
+  scene.hud.status.setText("BOTÓN 1: DISPARAR   START: PAUSA");
+  scene.state.phase = "playing";
   scene.physics.resume();
   showOleadaSplash(scene, 1);
-  playSound(scene, 'oleada');
+  playSound(scene, "oleada");
 }
 
 function pauseRun(scene) {
   clearPressedControls(scene);
-  scene.state.phase = 'paused';
+  scene.state.phase = "paused";
   scene.patriota.body.setVelocity(0, 0);
   scene.physics.pause();
   scene.state.pauseMenu = { cursor: 0, cooldown: 0, lastAxis: 0 };
@@ -869,11 +921,11 @@ function resumeRun(scene) {
   clearPressedControls(scene);
   scene.pauseScreen.container.setVisible(false);
   scene.physics.resume();
-  scene.state.phase = 'playing';
+  scene.state.phase = "playing";
 }
 
 function finishRun(scene) {
-  if (scene.state.phase !== 'playing' && scene.state.phase !== 'paused') {
+  if (scene.state.phase !== "playing" && scene.state.phase !== "paused") {
     return;
   }
 
@@ -884,14 +936,14 @@ function finishRun(scene) {
   clearLanceros(scene);
   scene.physics.pause();
   clearPressedControls(scene);
-  scene.state.phase = 'gameover';
-  scene.hud.status.setText('');
+  scene.state.phase = "gameover";
+  scene.hud.status.setText("");
 
   scene.endGame.rally.setText(Phaser.Math.RND.pick(DEFEAT_LINES));
   scene.endGame.summary.setText(
-    `PUNTOS ${String(scene.state.run.score).padStart(4, '0')} · OLEADA ${String(
+    `PUNTOS ${String(scene.state.run.score).padStart(4, "0")} · OLEADA ${String(
       scene.state.run.oleada,
-    ).padStart(2, '0')}`,
+    ).padStart(2, "0")}`,
   );
   scene.endGame.saveStatus.setText(scene.state.saveStatus);
   scene.endGame.container.setVisible(true);
@@ -904,7 +956,7 @@ function finishRun(scene) {
   scene.state.nameEntry.lastMoveVector = { x: 0, y: 0 };
   refreshNameEntry(scene);
   updateLetterGridHighlight(scene);
-  playSound(scene, 'defeat');
+  playSound(scene, "defeat");
 }
 
 function returnToStart(scene) {
@@ -941,21 +993,21 @@ function createControls(scene) {
     scene.controls.held[arcadeCode] = false;
   };
 
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
 
-  scene.events.once('shutdown', () => {
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
+  scene.events.once("shutdown", () => {
+    window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("keyup", onKeyUp);
   });
 }
 
 function normalizeIncomingKey(key) {
-  if (typeof key !== 'string' || key.length === 0) {
-    return '';
+  if (typeof key !== "string" || key.length === 0) {
+    return "";
   }
-  if (key === ' ') {
-    return 'space';
+  if (key === " ") {
+    return "space";
   }
   return key.toLowerCase();
 }
@@ -995,33 +1047,42 @@ function createStartScreen(scene) {
   const c = scene.add.container(0, 0).setDepth(15);
   scene.startScreen.container = c;
 
-  c.add(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.overlay, 0.96));
+  c.add(
+    scene.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      COLORS.overlay,
+      0.96,
+    ),
+  );
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, 44, 'PLATANUS HACK 26 · EDICIÓN CARACAS', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#b39a5f',
+      .text(GAME_WIDTH / 2, 44, "PLATANUS HACK 26 · EDICIÓN CARACAS", {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#b39a5f",
       })
       .setOrigin(0.5),
   );
 
   const marqueeTop = scene.add
-    .text(GAME_WIDTH / 2, 100, 'BATALLA DE', {
-      fontFamily: 'monospace',
-      fontSize: '40px',
-      color: '#f2ead0',
-      fontStyle: 'bold',
+    .text(GAME_WIDTH / 2, 100, "BATALLA DE", {
+      fontFamily: "monospace",
+      fontSize: "40px",
+      color: "#f2ead0",
+      fontStyle: "bold",
     })
     .setOrigin(0.5);
   const marqueeBottom = scene.add
-    .text(GAME_WIDTH / 2, 150, 'MATASIETE', {
-      fontFamily: 'monospace',
-      fontSize: '52px',
-      color: '#f2c14e',
-      fontStyle: 'bold',
-      stroke: '#584b34',
+    .text(GAME_WIDTH / 2, 150, "MATASIETE", {
+      fontFamily: "monospace",
+      fontSize: "52px",
+      color: "#f2c14e",
+      fontStyle: "bold",
+      stroke: "#584b34",
       strokeThickness: 5,
     })
     .setOrigin(0.5);
@@ -1034,13 +1095,13 @@ function createStartScreen(scene) {
     duration: 1100,
     yoyo: true,
     repeat: -1,
-    ease: 'Sine.easeInOut',
+    ease: "Sine.easeInOut",
   });
 
   scene.startScreen.buttons = createMenuButtons(
     scene,
     c,
-    ['JUGAR', 'MEJORES PUNTUAJES', '¿CONTROLES?'],
+    ["JUGAR", "MEJORES PUNTUAJES", "¿CONTROLES?"],
     236,
     48,
     300,
@@ -1048,20 +1109,20 @@ function createStartScreen(scene) {
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, 396, 'MEJORES PUNTUAJES', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#f2c14e',
-        fontStyle: 'bold',
+      .text(GAME_WIDTH / 2, 396, "MEJORES PUNTUAJES", {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color: "#f2c14e",
+        fontStyle: "bold",
       })
       .setOrigin(0.5),
   );
   scene.startScreen.leaderboard = scene.add
-    .text(GAME_WIDTH / 2, 418, '', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f2ead0',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 418, "", {
+      fontFamily: "monospace",
+      fontSize: "13px",
+      color: "#f2ead0",
+      align: "center",
       lineSpacing: 4,
     })
     .setOrigin(0.5, 0);
@@ -1069,11 +1130,16 @@ function createStartScreen(scene) {
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR', {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#8a7a50',
-      })
+      .text(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT - 22,
+        "JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR",
+        {
+          fontFamily: "monospace",
+          fontSize: "11px",
+          color: "#8a7a50",
+        },
+      )
       .setOrigin(0.5),
   );
 
@@ -1084,14 +1150,21 @@ function createMenuButtons(scene, container, labels, yStart, yStep, width) {
   const buttons = [];
   for (let i = 0; i < labels.length; i += 1) {
     const y = yStart + i * yStep;
-    const bg = scene.add.rectangle(GAME_WIDTH / 2, y, width, 40, COLORS.cell, 0.95);
+    const bg = scene.add.rectangle(
+      GAME_WIDTH / 2,
+      y,
+      width,
+      40,
+      COLORS.cell,
+      0.95,
+    );
     bg.setStrokeStyle(2, COLORS.frame, 0.8);
     const label = scene.add
       .text(GAME_WIDTH / 2, y, labels[i], {
-        fontFamily: 'monospace',
-        fontSize: '20px',
-        color: '#f2ead0',
-        fontStyle: 'bold',
+        fontFamily: "monospace",
+        fontSize: "20px",
+        color: "#f2ead0",
+        fontStyle: "bold",
       })
       .setOrigin(0.5);
     container.add(bg);
@@ -1106,7 +1179,7 @@ function updateMenuHighlight(buttons, cursor) {
     const active = i === cursor;
     bg.setFillStyle(active ? COLORS.accent : COLORS.cell, active ? 1 : 0.95);
     bg.setStrokeStyle(2, active ? COLORS.sand : COLORS.frame, active ? 1 : 0.8);
-    label.setColor(active ? '#2a2214' : '#f2ead0');
+    label.setColor(active ? "#2a2214" : "#f2ead0");
   });
 }
 
@@ -1118,7 +1191,7 @@ function handleMenuNavigation(scene, time, menu, buttonCount) {
     menu.cursor = Phaser.Math.Wrap(menu.cursor + axisY, 0, buttonCount);
     menu.cooldown = time + 160;
     moved = true;
-    playSound(scene, 'click');
+    playSound(scene, "click");
   }
   menu.lastAxis = axisY;
   return moved;
@@ -1126,7 +1199,7 @@ function handleMenuNavigation(scene, time, menu, buttonCount) {
 
 function showStartScreen(scene) {
   clearPressedControls(scene);
-  scene.state.phase = 'start';
+  scene.state.phase = "start";
   scene.state.menu = { cursor: 0, cooldown: 0, lastAxis: 0 };
   refreshStartScreenLeaderboard(scene);
   updateMenuHighlight(scene.startScreen.buttons, scene.state.menu.cursor);
@@ -1135,12 +1208,14 @@ function showStartScreen(scene) {
 
 function handleStartMenu(scene, time) {
   const menu = scene.state.menu;
-  if (handleMenuNavigation(scene, time, menu, scene.startScreen.buttons.length)) {
+  if (
+    handleMenuNavigation(scene, time, menu, scene.startScreen.buttons.length)
+  ) {
     updateMenuHighlight(scene.startScreen.buttons, menu.cursor);
   }
 
-  if (consumeAnyPressedControl(scene, ['P1_1', 'P2_1', 'START1', 'START2'])) {
-    playSound(scene, 'select');
+  if (consumeAnyPressedControl(scene, ["P1_1", "P2_1", "START1", "START2"])) {
+    playSound(scene, "select");
     startAmbientMusic(scene);
     if (menu.cursor === 0) {
       startRun(scene);
@@ -1159,24 +1234,33 @@ function createLeaderboardScreen(scene) {
   const c = scene.add.container(0, 0).setDepth(16);
   scene.leaderScreen.container = c;
 
-  c.add(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.overlay, 0.98));
+  c.add(
+    scene.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      COLORS.overlay,
+      0.98,
+    ),
+  );
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, 90, 'MEJORES PUNTUAJES', {
-        fontFamily: 'monospace',
-        fontSize: '30px',
-        color: '#f2c14e',
-        fontStyle: 'bold',
+      .text(GAME_WIDTH / 2, 90, "MEJORES PUNTUAJES", {
+        fontFamily: "monospace",
+        fontSize: "30px",
+        color: "#f2c14e",
+        fontStyle: "bold",
       })
       .setOrigin(0.5),
   );
 
   scene.leaderScreen.list = scene.add
-    .text(GAME_WIDTH / 2, 170, '', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      color: '#f2ead0',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 170, "", {
+      fontFamily: "monospace",
+      fontSize: "20px",
+      color: "#f2ead0",
+      align: "center",
       lineSpacing: 14,
     })
     .setOrigin(0.5, 0);
@@ -1184,10 +1268,10 @@ function createLeaderboardScreen(scene) {
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, 'PULSA START PARA VOLVER', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#8a7a50',
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#8a7a50",
       })
       .setOrigin(0.5),
   );
@@ -1197,10 +1281,12 @@ function createLeaderboardScreen(scene) {
 
 function showLeaderboardScreen(scene) {
   clearPressedControls(scene);
-  scene.leaderScreen.list.setText(formatHighScores(scene.state.highScores).join('\n'));
+  scene.leaderScreen.list.setText(
+    formatHighScores(scene.state.highScores).join("\n"),
+  );
   scene.startScreen.container.setVisible(false);
   scene.leaderScreen.container.setVisible(true);
-  scene.state.phase = 'leaderboard';
+  scene.state.phase = "leaderboard";
 }
 
 function createControlsScreen(scene) {
@@ -1208,40 +1294,49 @@ function createControlsScreen(scene) {
   const c = scene.add.container(0, 0).setDepth(16);
   scene.controlsScreen.container = c;
 
-  c.add(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.overlay, 0.98));
+  c.add(
+    scene.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      COLORS.overlay,
+      0.98,
+    ),
+  );
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, 100, '¿CONTROLES?', {
-        fontFamily: 'monospace',
-        fontSize: '30px',
-        color: '#f2c14e',
-        fontStyle: 'bold',
+      .text(GAME_WIDTH / 2, 100, "¿CONTROLES?", {
+        fontFamily: "monospace",
+        fontSize: "30px",
+        color: "#f2c14e",
+        fontStyle: "bold",
       })
       .setOrigin(0.5),
   );
 
   const lines = [
-    'JOYSTICK ....... MOVER · ELEGIR',
-    'BOTÓN 1 ........ CONFIRMAR',
-    'START .......... PAUSA · COMENZAR',
-    '',
-    'EN COMBATE',
-    'JOYSTICK ....... MOVER · MIRAR',
-    'BOTÓN 1 ........ DISPARAR (SOSTENER)',
-    '',
-    'EN PAUSA',
-    'JOYSTICK ....... ELEGIR OPCIÓN',
-    'START .......... CONFIRMAR',
-    '',
-    'RENDIRSE TERMINA LA PARTIDA',
+    "JOYSTICK ....... MOVER · ELEGIR",
+    "BOTÓN 1 ........ CONFIRMAR",
+    "START .......... PAUSA · COMENZAR",
+    "",
+    "EN COMBATE",
+    "JOYSTICK ....... MOVER · MIRAR",
+    "BOTÓN 1 ........ DISPARAR (SOSTENER)",
+    "",
+    "EN PAUSA",
+    "JOYSTICK ....... ELEGIR OPCIÓN",
+    "START .......... CONFIRMAR",
+    "",
+    "RENDIRSE TERMINA LA PARTIDA",
   ];
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, 180, lines.join('\n'), {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        color: '#f2ead0',
-        align: 'center',
+      .text(GAME_WIDTH / 2, 180, lines.join("\n"), {
+        fontFamily: "monospace",
+        fontSize: "16px",
+        color: "#f2ead0",
+        align: "center",
         lineSpacing: 8,
       })
       .setOrigin(0.5, 0),
@@ -1249,10 +1344,10 @@ function createControlsScreen(scene) {
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, 'PULSA START PARA VOLVER', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#8a7a50',
+      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#8a7a50",
       })
       .setOrigin(0.5),
   );
@@ -1264,7 +1359,7 @@ function showControlsScreen(scene) {
   clearPressedControls(scene);
   scene.startScreen.container.setVisible(false);
   scene.controlsScreen.container.setVisible(true);
-  scene.state.phase = 'controls';
+  scene.state.phase = "controls";
 }
 
 function closeAttractScreen(scene) {
@@ -1274,11 +1369,15 @@ function closeAttractScreen(scene) {
 }
 
 function refreshStartScreenLeaderboard(scene) {
-  scene.startScreen.leaderboard.setText(formatHighScores(scene.state.highScores).join('\n'));
+  scene.startScreen.leaderboard.setText(
+    formatHighScores(scene.state.highScores).join("\n"),
+  );
 }
 
 function refreshLeaderboard(scene) {
-  scene.endGame.leaderboard.setText(formatHighScores(scene.state.highScores).join('\n'));
+  scene.endGame.leaderboard.setText(
+    formatHighScores(scene.state.highScores).join("\n"),
+  );
 }
 
 function refreshAllLeaderboards(scene) {
@@ -1288,12 +1387,12 @@ function refreshAllLeaderboards(scene) {
 
 function formatHighScores(entries) {
   if (!entries.length) {
-    return ['SIN PUNTOS AÚN'];
+    return ["SIN PUNTOS AÚN"];
   }
   return entries.map((entry, index) => {
-    const rank = String(index + 1).padStart(2, '0');
-    const name = entry.name.padEnd(3, ' ');
-    const score = String(entry.score).padStart(5, '0');
+    const rank = String(index + 1).padStart(2, "0");
+    const name = entry.name.padEnd(3, " ");
+    const score = String(entry.score).padStart(5, "0");
     return `${rank} ${name} ${score}`;
   });
 }
@@ -1305,14 +1404,23 @@ function createPauseScreen(scene) {
   const c = scene.add.container(0, 0).setDepth(25);
   scene.pauseScreen.container = c;
 
-  c.add(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.overlay, 0.85));
+  c.add(
+    scene.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      COLORS.overlay,
+      0.85,
+    ),
+  );
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, 'PAUSA', {
-        fontFamily: 'monospace',
-        fontSize: '52px',
-        color: '#f2c14e',
-        fontStyle: 'bold',
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, "PAUSA", {
+        fontFamily: "monospace",
+        fontSize: "52px",
+        color: "#f2c14e",
+        fontStyle: "bold",
       })
       .setOrigin(0.5),
   );
@@ -1320,7 +1428,7 @@ function createPauseScreen(scene) {
   scene.pauseScreen.buttons = createMenuButtons(
     scene,
     c,
-    ['CONTINUAR', 'RENDIRSE'],
+    ["CONTINUAR", "RENDIRSE"],
     GAME_HEIGHT / 2 - 10,
     52,
     280,
@@ -1328,11 +1436,16 @@ function createPauseScreen(scene) {
 
   c.add(
     scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, 'JOYSTICK: ELEGIR   START: CONFIRMAR', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#8a7a50',
-      })
+      .text(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT / 2 + 120,
+        "JOYSTICK: ELEGIR   START: CONFIRMAR",
+        {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: "#8a7a50",
+        },
+      )
       .setOrigin(0.5),
   );
 
@@ -1341,12 +1454,14 @@ function createPauseScreen(scene) {
 
 function handlePauseMenu(scene, time) {
   const menu = scene.state.pauseMenu;
-  if (handleMenuNavigation(scene, time, menu, scene.pauseScreen.buttons.length)) {
+  if (
+    handleMenuNavigation(scene, time, menu, scene.pauseScreen.buttons.length)
+  ) {
     updateMenuHighlight(scene.pauseScreen.buttons, menu.cursor);
   }
 
-  if (consumeAnyPressedControl(scene, ['START1', 'START2', 'P1_1', 'P2_1'])) {
-    playSound(scene, 'select');
+  if (consumeAnyPressedControl(scene, ["START1", "START2", "P1_1", "P2_1"])) {
+    playSound(scene, "select");
     if (menu.cursor === 0) {
       resumeRun(scene);
     } else {
@@ -1362,80 +1477,89 @@ function createEndGameUi(scene) {
   const c = scene.add.container(0, 0).setDepth(20);
   scene.endGame.container = c;
 
-  c.add(scene.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.backdrop, 0.98));
+  c.add(
+    scene.add.rectangle(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      COLORS.backdrop,
+      0.98,
+    ),
+  );
 
   scene.endGame.title = scene.add
-    .text(GAME_WIDTH / 2, 64, '¡DERROTA!', {
-      fontFamily: 'monospace',
-      fontSize: '40px',
-      color: '#c0392b',
-      fontStyle: 'bold',
+    .text(GAME_WIDTH / 2, 64, "¡DERROTA!", {
+      fontFamily: "monospace",
+      fontSize: "40px",
+      color: "#c0392b",
+      fontStyle: "bold",
     })
     .setOrigin(0.5);
 
   scene.endGame.rally = scene.add
-    .text(GAME_WIDTH / 2, 112, '', {
-      fontFamily: 'monospace',
-      fontSize: '18px',
-      color: '#f2c14e',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 112, "", {
+      fontFamily: "monospace",
+      fontSize: "18px",
+      color: "#f2c14e",
+      align: "center",
     })
     .setOrigin(0.5);
 
   scene.endGame.summary = scene.add
-    .text(GAME_WIDTH / 2, 144, '', {
-      fontFamily: 'monospace',
-      fontSize: '16px',
-      color: '#f2ead0',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 144, "", {
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#f2ead0",
+      align: "center",
     })
     .setOrigin(0.5);
 
   scene.endGame.nameLabel = scene.add
-    .text(GAME_WIDTH / 2, 180, 'INICIALES', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#8a7a50',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 180, "INICIALES", {
+      fontFamily: "monospace",
+      fontSize: "13px",
+      color: "#8a7a50",
+      align: "center",
     })
     .setOrigin(0.5);
 
   scene.endGame.nameValue = scene.add
-    .text(GAME_WIDTH / 2, 214, '___', {
-      fontFamily: 'monospace',
-      fontSize: '34px',
-      color: '#f2c14e',
-      fontStyle: 'bold',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 214, "___", {
+      fontFamily: "monospace",
+      fontSize: "34px",
+      color: "#f2c14e",
+      fontStyle: "bold",
+      align: "center",
       letterSpacing: 10,
     })
     .setOrigin(0.5);
 
   scene.endGame.instructions = scene.add
-    .text(GAME_WIDTH / 2, 246, 'MOVER: ELEGIR   BOTÓN 1: CONFIRMAR', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#8a7a50',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 246, "MOVER: ELEGIR   BOTÓN 1: CONFIRMAR", {
+      fontFamily: "monospace",
+      fontSize: "11px",
+      color: "#8a7a50",
+      align: "center",
     })
     .setOrigin(0.5);
 
   scene.endGame.leaderboardTitle = scene.add
-    .text(GAME_WIDTH / 2, 280, 'MEJORES PUNTUAJES', {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      color: '#f2c14e',
-      fontStyle: 'bold',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 280, "MEJORES PUNTUAJES", {
+      fontFamily: "monospace",
+      fontSize: "13px",
+      color: "#f2c14e",
+      fontStyle: "bold",
+      align: "center",
     })
     .setOrigin(0.5);
 
   scene.endGame.leaderboard = scene.add
-    .text(GAME_WIDTH / 2, 300, '', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#f2ead0',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 300, "", {
+      fontFamily: "monospace",
+      fontSize: "12px",
+      color: "#f2ead0",
+      align: "center",
       lineSpacing: 3,
     })
     .setOrigin(0.5, 0);
@@ -1450,16 +1574,23 @@ function createEndGameUi(scene) {
       const cellY = 408 + row * 30;
       const wide = value.length > 1;
 
-      const cell = scene.add.rectangle(cellX, cellY, wide ? 96 : 42, 24, COLORS.cell, 0.95);
+      const cell = scene.add.rectangle(
+        cellX,
+        cellY,
+        wide ? 96 : 42,
+        24,
+        COLORS.cell,
+        0.95,
+      );
       cell.setStrokeStyle(2, COLORS.frame, 0.8);
 
       const label = scene.add
         .text(cellX, cellY, value, {
-          fontFamily: 'monospace',
-          fontSize: wide ? '13px' : '18px',
-          color: '#f2ead0',
-          fontStyle: 'bold',
-          align: 'center',
+          fontFamily: "monospace",
+          fontSize: wide ? "13px" : "18px",
+          color: "#f2ead0",
+          fontStyle: "bold",
+          align: "center",
         })
         .setOrigin(0.5);
 
@@ -1470,11 +1601,11 @@ function createEndGameUi(scene) {
   }
 
   scene.endGame.saveStatus = scene.add
-    .text(GAME_WIDTH / 2, 584, '', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#f2c14e',
-      align: 'center',
+    .text(GAME_WIDTH / 2, 584, "", {
+      fontFamily: "monospace",
+      fontSize: "11px",
+      color: "#f2c14e",
+      align: "center",
     })
     .setOrigin(0.5);
 
@@ -1503,7 +1634,7 @@ function handleNameEntry(scene, time) {
   ) {
     moveLetterSelection(scene, axisX, axisY);
     entry.moveCooldownUntil = time + 160;
-    playSound(scene, 'click');
+    playSound(scene, "click");
   }
 
   if (axisX === 0 && axisY === 0) {
@@ -1514,10 +1645,10 @@ function handleNameEntry(scene, time) {
 
   if (
     time >= entry.confirmCooldownUntil &&
-    consumeAnyPressedControl(scene, ['P1_1', 'P2_1', 'START1', 'START2'])
+    consumeAnyPressedControl(scene, ["P1_1", "P2_1", "START1", "START2"])
   ) {
     entry.confirmCooldownUntil = time + 180;
-    playSound(scene, 'select');
+    playSound(scene, "select");
     activateCurrentLetter(scene);
   }
 }
@@ -1530,7 +1661,11 @@ function moveLetterSelection(scene, axisX, axisY) {
     entry.col = Math.min(entry.col, LETTER_GRID[entry.row].length - 1);
   }
   if (axisX !== 0) {
-    entry.col = Phaser.Math.Wrap(entry.col + axisX, 0, LETTER_GRID[entry.row].length);
+    entry.col = Phaser.Math.Wrap(
+      entry.col + axisX,
+      0,
+      LETTER_GRID[entry.row].length,
+    );
   }
 
   updateLetterGridHighlight(scene);
@@ -1540,9 +1675,16 @@ function updateLetterGridHighlight(scene) {
   const entry = scene.state.nameEntry;
   for (const item of scene.endGame.gridLabels) {
     const active = item.row === entry.row && item.col === entry.col;
-    item.cell.setFillStyle(active ? COLORS.accent : COLORS.cell, active ? 1 : 0.95);
-    item.cell.setStrokeStyle(2, active ? COLORS.sand : COLORS.frame, active ? 1 : 0.8);
-    item.label.setColor(active ? '#2a2214' : '#f2ead0');
+    item.cell.setFillStyle(
+      active ? COLORS.accent : COLORS.cell,
+      active ? 1 : 0.95,
+    );
+    item.cell.setStrokeStyle(
+      2,
+      active ? COLORS.sand : COLORS.frame,
+      active ? 1 : 0.8,
+    );
+    item.label.setColor(active ? "#2a2214" : "#f2ead0");
   }
 }
 
@@ -1550,15 +1692,17 @@ function activateCurrentLetter(scene) {
   const entry = scene.state.nameEntry;
   const selectedValue = LETTER_GRID[entry.row][entry.col];
 
-  if (selectedValue === 'BORRAR') {
+  if (selectedValue === "BORRAR") {
     entry.letters.pop();
     refreshNameEntry(scene);
     return;
   }
 
-  if (selectedValue === 'LISTO') {
+  if (selectedValue === "LISTO") {
     if (entry.letters.length === 0) {
-      scene.endGame.saveStatus.setText('Elige al menos un carácter antes de guardar.');
+      scene.endGame.saveStatus.setText(
+        "Elige al menos un carácter antes de guardar.",
+      );
       return;
     }
     submitHighScore(scene);
@@ -1575,18 +1719,19 @@ function activateCurrentLetter(scene) {
 function refreshNameEntry(scene) {
   const letters = scene.state.nameEntry.letters.slice();
   while (letters.length < WINNING_NAME_LENGTH) {
-    letters.push('_');
+    letters.push("_");
   }
-  scene.endGame.nameValue.setText(letters.join(' '));
+  scene.endGame.nameValue.setText(letters.join(" "));
 }
 
 function submitHighScore(scene) {
-  if (scene.state.phase !== 'gameover') {
+  if (scene.state.phase !== "gameover") {
     return;
   }
 
   const initials =
-    scene.state.nameEntry.letters.join('').slice(0, WINNING_NAME_LENGTH) || '???';
+    scene.state.nameEntry.letters.join("").slice(0, WINNING_NAME_LENGTH) ||
+    "???";
 
   const entry = {
     name: initials,
@@ -1597,7 +1742,7 @@ function submitHighScore(scene) {
   scene.state.saveStatus = `¡Guardado ${initials}! START: OTRA PARTIDA · BOTÓN 1: TÍTULO`;
   scene.endGame.saveStatus.setText(scene.state.saveStatus);
   clearPressedControls(scene);
-  scene.state.phase = 'saved';
+  scene.state.phase = "saved";
 
   persistHighScore(entry)
     .then((nextScores) => {
@@ -1605,8 +1750,8 @@ function submitHighScore(scene) {
       refreshAllLeaderboards(scene);
     })
     .catch(() => {
-      scene.state.saveStatus = 'No se pudo guardar, pero la partida cuenta.';
-      if (scene.state.phase === 'saved') {
+      scene.state.saveStatus = "No se pudo guardar, pero la partida cuenta.";
+      if (scene.state.phase === "saved") {
         scene.endGame.saveStatus.setText(scene.state.saveStatus);
       }
     });
@@ -1644,15 +1789,15 @@ async function loadHighScores() {
 function isHighScoreEntry(value) {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      typeof value.name === 'string' &&
-      value.name.length > 0 &&
-      value.name.length <= MAX_NAME_LENGTH &&
-      typeof value.score === 'number' &&
-      isFinite(value.score) &&
-      value.score >= 0 &&
-      value.score <= MAX_SCORE &&
-      typeof value.savedAt === 'string',
+    typeof value === "object" &&
+    typeof value.name === "string" &&
+    value.name.length > 0 &&
+    value.name.length <= MAX_NAME_LENGTH &&
+    typeof value.score === "number" &&
+    isFinite(value.score) &&
+    value.score >= 0 &&
+    value.score <= MAX_SCORE &&
+    typeof value.savedAt === "string",
   );
 }
 
@@ -1713,7 +1858,7 @@ function startAmbientMusic(scene) {
     dlFb.connect(out);
 
     const padFilt = ctx.createBiquadFilter();
-    padFilt.type = 'lowpass';
+    padFilt.type = "lowpass";
     padFilt.frequency.value = 800;
     padFilt.Q.value = 1.4;
     padFilt.connect(out);
@@ -1728,12 +1873,12 @@ function startAmbientMusic(scene) {
     lfo.start();
 
     [
-      [110, 0, 'sawtooth'],
-      [110, 11, 'sawtooth'],
-      [110, -11, 'sawtooth'],
-      [130.81, 0, 'triangle'],
-      [164.81, 5, 'triangle'],
-      [196, -4, 'triangle'],
+      [110, 0, "sawtooth"],
+      [110, 11, "sawtooth"],
+      [110, -11, "sawtooth"],
+      [130.81, 0, "triangle"],
+      [164.81, 5, "triangle"],
+      [196, -4, "triangle"],
     ].forEach(([f, d, type]) => {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -1746,7 +1891,9 @@ function startAmbientMusic(scene) {
       osc.start();
     });
 
-    const ARP = [220, 261.63, 293.66, 329.63, 392, 440, 392, 329.63, 293.66, 261.63];
+    const ARP = [
+      220, 261.63, 293.66, 329.63, 392, 440, 392, 329.63, 293.66, 261.63,
+    ];
     const STEP = 0.43;
     const ALEN = ARP.length * STEP;
 
@@ -1755,7 +1902,7 @@ function startAmbientMusic(scene) {
         const t = t0 + i * STEP;
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
-        osc.type = 'triangle';
+        osc.type = "triangle";
         osc.frequency.value = freq;
         osc.connect(g);
         g.connect(out);
@@ -1766,14 +1913,16 @@ function startAmbientMusic(scene) {
         osc.start(t);
         osc.stop(t + STEP * 0.72);
       });
-      scene.time.delayedCall((ALEN - 0.06) * 1000, () => scheduleArp(t0 + ALEN));
+      scene.time.delayedCall((ALEN - 0.06) * 1000, () =>
+        scheduleArp(t0 + ALEN),
+      );
     }
 
     const BEAT = 1.0;
     function scheduleBass(t) {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
-      osc.type = 'sine';
+      osc.type = "sine";
       osc.frequency.value = 55;
       osc.connect(g);
       g.connect(out);
@@ -1792,31 +1941,34 @@ function startAmbientMusic(scene) {
 
 function playSound(scene, type) {
   try {
-    const ctx = scene.sound && scene.sound.context ? scene.sound.context : new AudioContext();
+    const ctx =
+      scene.sound && scene.sound.context
+        ? scene.sound.context
+        : new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    if (type === 'click') {
-      osc.type = 'square';
+    if (type === "click") {
+      osc.type = "square";
       osc.frequency.setValueAtTime(1200, now);
       osc.frequency.exponentialRampToValueAtTime(600, now + 0.04);
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
       osc.start(now);
       osc.stop(now + 0.05);
-    } else if (type === 'select') {
-      osc.type = 'square';
+    } else if (type === "select") {
+      osc.type = "square";
       osc.frequency.setValueAtTime(700, now);
       osc.frequency.exponentialRampToValueAtTime(1400, now + 0.08);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
       osc.start(now);
       osc.stop(now + 0.1);
-    } else if (type === 'oleada') {
-      osc.type = 'square';
+    } else if (type === "oleada") {
+      osc.type = "square";
       osc.frequency.setValueAtTime(523, now);
       osc.frequency.setValueAtTime(659, now + 0.09);
       osc.frequency.setValueAtTime(784, now + 0.18);
@@ -1824,40 +1976,40 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
       osc.start(now);
       osc.stop(now + 0.34);
-    } else if (type === 'shot') {
-      osc.type = 'square';
+    } else if (type === "shot") {
+      osc.type = "square";
       osc.frequency.setValueAtTime(920, now);
       osc.frequency.exponentialRampToValueAtTime(160, now + 0.07);
       gain.gain.setValueAtTime(0.09, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.start(now);
       osc.stop(now + 0.09);
-    } else if (type === 'hit') {
-      osc.type = 'square';
+    } else if (type === "hit") {
+      osc.type = "square";
       osc.frequency.setValueAtTime(500, now);
       osc.frequency.exponentialRampToValueAtTime(220, now + 0.05);
       gain.gain.setValueAtTime(0.07, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
       osc.start(now);
       osc.stop(now + 0.06);
-    } else if (type === 'kill') {
-      osc.type = 'triangle';
+    } else if (type === "kill") {
+      osc.type = "triangle";
       osc.frequency.setValueAtTime(300, now);
       osc.frequency.exponentialRampToValueAtTime(60, now + 0.16);
       gain.gain.setValueAtTime(0.14, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
       osc.start(now);
       osc.stop(now + 0.18);
-    } else if (type === 'hurt') {
-      osc.type = 'sawtooth';
+    } else if (type === "hurt") {
+      osc.type = "sawtooth";
       osc.frequency.setValueAtTime(440, now);
       osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
       gain.gain.setValueAtTime(0.16, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
       osc.start(now);
       osc.stop(now + 0.24);
-    } else if (type === 'defeat') {
-      osc.type = 'sawtooth';
+    } else if (type === "defeat") {
+      osc.type = "sawtooth";
       osc.frequency.setValueAtTime(330, now);
       osc.frequency.exponentialRampToValueAtTime(70, now + 0.6);
       gain.gain.setValueAtTime(0.22, now);
