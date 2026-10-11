@@ -1,7 +1,8 @@
 // Platanus Hack 26 — Batalla de Matasiete
 // Un patriota defiende la isla de Margarita contra los Lanceros españoles:
 // flujo completo (título → partida → pausa → derrota → iniciales → mejores
-// puntuaciones), combate en cuatro bordes, 3 vidas e invulnerabilidad breve.
+// puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
+// 3 vidas e invulnerabilidad breve.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
@@ -17,8 +18,13 @@ const BULLET_MARGIN = 12;
 const LANCERO_SPEED = 64;
 const LANCERO_HP = 2;
 const LANCERO_SCORE = 100;
-const LANCEROS_PER_BATCH = 6;
-const BATCH_RESPAWN_MS = 1200;
+const OLEADA_BASE_COUNT = 3;
+const OLEADA_COUNT_CAP = 20;
+const OLEADA_SPAWN_MS = 500;
+const OLEADA_SPEED_CAP = 1.5;
+const OLEADA_SPEED_STEP = 0.1;
+const OLEADA_LULL_MS = 1500;
+const OLEADA_BONUS = 50;
 const CONTACT_RANGE = 16;
 const HIT_RANGE = 16;
 const LIVES_TOTAL = 3;
@@ -231,7 +237,7 @@ function update(time) {
     if (scene.state.phase !== "playing") {
       return;
     }
-    scheduleBatchRespawn(scene, time);
+    scheduleOleadaSpawn(scene, time);
     if (consumeAnyPressedControl(scene, ["START1", "START2"])) {
       pauseRun(scene);
     }
@@ -506,9 +512,10 @@ function createLanceros(scene) {
   scene.lanceros = scene.physics.add.group();
 }
 
-function spawnLanceros(scene, count) {
+function spawnLanceros(scene, count, startIndex = 0) {
   for (let i = 0; i < count; i += 1) {
-    const point = edgeSpawnPoint(i % 4, Phaser.Math.RND.frac());
+    const spawnIndex = startIndex + i;
+    const point = edgeSpawnPoint(spawnIndex % 4, Phaser.Math.RND.frac());
     const lancero = scene.lanceros.create(point.x, point.y, "lancero");
     lancero.setDepth(4);
     lancero.hp = LANCERO_HP;
@@ -523,19 +530,40 @@ function spawnLanceros(scene, count) {
   }
 }
 
-function scheduleBatchRespawn(scene, time) {
+function beginOleada(run, oleada, startTime) {
+  run.oleada = oleada;
+  run.oleadaTotal = oleadaSize(oleada);
+  run.oleadaSpawned = 0;
+  run.oleadaInterval = oleadaSpawnInterval(oleada);
+  run.nextSpawnAt = startTime;
+}
+
+function scheduleOleadaSpawn(scene, time) {
   const run = scene.state.run;
-  if (scene.lanceros.getLength() > 0) {
-    run.respawnAt = 0;
+
+  if (run.lullUntil > 0) {
+    if (time < run.lullUntil) {
+      return;
+    }
+    run.lullUntil = 0;
+    run.nextSpawnAt = time;
+  }
+
+  if (run.oleadaSpawned < run.oleadaTotal && time >= run.nextSpawnAt) {
+    spawnLanceros(scene, 1, run.oleadaSpawned);
+    run.oleadaSpawned += 1;
+    run.nextSpawnAt = time + run.oleadaInterval;
     return;
   }
-  if (!run.respawnAt) {
-    run.respawnAt = time + BATCH_RESPAWN_MS;
-    return;
-  }
-  if (time >= run.respawnAt) {
-    run.respawnAt = 0;
-    spawnLanceros(scene, LANCEROS_PER_BATCH);
+
+  if (isOleadaCleared(run) && scene.lanceros.getLength() === 0) {
+    run.score += oleadaBonus(run.oleada);
+    beginOleada(run, run.oleada + 1, time + OLEADA_LULL_MS);
+    run.lullUntil = time + OLEADA_LULL_MS;
+    refreshHud(scene);
+    playSound(scene, "bonus");
+    showOleadaSplash(scene, run.oleada);
+    playSound(scene, "oleada");
   }
 }
 
@@ -755,6 +783,31 @@ function pointsForKill(kind) {
   return kind === "lancero" ? LANCERO_SCORE : 0;
 }
 
+// --- director de oleadas (lógica pura) ---------------------------------------
+
+function oleadaSize(oleada) {
+  return Math.min(OLEADA_BASE_COUNT + oleada, OLEADA_COUNT_CAP);
+}
+
+function oleadaSpawnSpeed(oleada) {
+  return Math.min(
+    1 + Math.max(0, oleada - 1) * OLEADA_SPEED_STEP,
+    OLEADA_SPEED_CAP,
+  );
+}
+
+function oleadaSpawnInterval(oleada) {
+  return Math.round(OLEADA_SPAWN_MS / oleadaSpawnSpeed(oleada));
+}
+
+function oleadaBonus(oleada) {
+  return oleada > 0 ? OLEADA_BONUS * oleada : 0;
+}
+
+function isOleadaCleared(run) {
+  return run.oleadaSpawned >= run.oleadaTotal;
+}
+
 function withinRange(x1, y1, x2, y2, range) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -861,7 +914,7 @@ function showOleadaSplash(scene, oleada) {
     alpha: 0.12,
     duration: 150,
     yoyo: true,
-    repeat: 7,
+    repeat: 9,
   });
   scene.time.delayedCall(1700, () => {
     scene.tweens.killTweensOf(splash);
@@ -872,7 +925,7 @@ function showOleadaSplash(scene, oleada) {
 // --- flujo de partida ---------------------------------------------------------
 
 function freshRun() {
-  return {
+  const run = {
     score: 0,
     oleada: 1,
     facing: "N",
@@ -881,8 +934,14 @@ function freshRun() {
     invulnerableUntil: 0,
     knock: { x: 0, y: 0 },
     knockUntil: 0,
-    respawnAt: 0,
+    oleadaTotal: 0,
+    oleadaSpawned: 0,
+    oleadaInterval: 0,
+    nextSpawnAt: 0,
+    lullUntil: 0,
   };
+  beginOleada(run, 1, 0);
+  return run;
 }
 
 function startRun(scene) {
@@ -894,7 +953,6 @@ function startRun(scene) {
   scene.state.run = freshRun();
   clearBullets(scene);
   clearLanceros(scene);
-  spawnLanceros(scene, LANCEROS_PER_BATCH);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   scene.patriota.setRotation(facingRotation("N"));
   scene.patriota.setActive(true).setVisible(true);
@@ -1976,6 +2034,15 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
       osc.start(now);
       osc.stop(now + 0.34);
+    } else if (type === "bonus") {
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(784, now);
+      osc.frequency.setValueAtTime(988, now + 0.08);
+      osc.frequency.setValueAtTime(1175, now + 0.16);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
     } else if (type === "shot") {
       osc.type = "square";
       osc.frequency.setValueAtTime(920, now);
