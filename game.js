@@ -684,23 +684,16 @@ function getMoveVector(controls) {
   return { x, y };
 }
 
+const FACINGS_BY_SECTOR = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
+
 function facingFromVector(vector) {
   const x = vector.x;
   const y = vector.y;
-  console.log("facingFromVector", vector, x, y);
   if (x === 0 && y === 0) {
     return null;
   }
-  if (y === 0) {
-    return x > 0 ? "E" : "W";
-  }
-  if (x === 0) {
-    return y > 0 ? "S" : "N";
-  }
-  if (x > 0) {
-    return y > 0 ? "SE" : "NE";
-  }
-  return y > 0 ? "SW" : "NW";
+  const sector = Math.round(Math.atan2(y, x) / (Math.PI / 4));
+  return FACINGS_BY_SECTOR[((sector % 8) + 8) % 8];
 }
 
 function nextFacing(facing, vector) {
