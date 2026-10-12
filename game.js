@@ -13,6 +13,9 @@ const MAX_NAME_LENGTH = 8;
 const MAX_SCORE = 1e9;
 const PATRIOTA_SPEED = 170;
 const FIRE_INTERVAL = 200;
+const SABLE_COOLDOWN = 400;
+const SABLE_RANGE = 60;
+const SABLE_HALF_ARC = Math.PI / 4;
 const BULLET_SPEED = 460;
 const BULLET_MARGIN = 12;
 const LANCERO_SPEED = 64;
@@ -174,6 +177,7 @@ function create() {
   createStage(scene);
   createPatriota(scene);
   createBullets(scene);
+  createSable(scene);
   createLanceros(scene);
   createHud(scene);
   createEndGameUi(scene);
@@ -442,6 +446,60 @@ function createBullets(scene) {
   scene.bullets = scene.physics.add.group();
 }
 
+function createSable(scene) {
+  const g = scene.add.graphics();
+  const c = 64;
+  g.fillStyle(COLORS.frame, 0.85);
+  g.slice(c, c, c, -Math.PI / 4, Math.PI / 4, false);
+  g.fillPath();
+  g.fillStyle(COLORS.trim, 0.7);
+  g.slice(c, c, c - 12, -Math.PI / 4, Math.PI / 4, false);
+  g.fillPath();
+  g.fillStyle(COLORS.accent, 0.9);
+  g.slice(c, c, c - 30, -Math.PI / 4, Math.PI / 4, false);
+  g.fillPath();
+  g.generateTexture("arco", 2 * c, 2 * c);
+  g.destroy();
+
+  scene.sableArc = scene.add
+    .image(scene.patriota.x, scene.patriota.y, "arco")
+    .setDepth(7)
+    .setVisible(false);
+}
+
+function swingSable(scene, facing) {
+  const arc = scene.sableArc;
+  arc.setPosition(scene.patriota.x, scene.patriota.y);
+  arc.setRotation(facingRotation(facing));
+  arc.setAlpha(1).setScale(0.75).setVisible(true);
+  scene.tweens.add({
+    targets: arc,
+    scale: 1.15,
+    alpha: 0,
+    duration: 160,
+    onComplete: () => arc.setVisible(false),
+  });
+}
+
+function resolveSableHits(scene, facing) {
+  const run = scene.state.run;
+  const px = scene.patriota.x;
+  const py = scene.patriota.y;
+  let kills = 0;
+  for (const lancero of scene.lanceros.getChildren().slice()) {
+    if (!inSableArc(px, py, facing, lancero.x, lancero.y)) {
+      continue;
+    }
+    lancero.destroy();
+    run.score += pointsForKill(lancero.kind);
+    kills += 1;
+  }
+  if (kills > 0) {
+    refreshHud(scene);
+    playSound(scene, "kill");
+  }
+}
+
 function fireBullet(scene) {
   const facing = scene.state.run.facing;
   const direction = facingVector(facing);
@@ -662,11 +720,23 @@ function updatePatriota(scene, time) {
   const invulnerable = isInvulnerable(time, run.invulnerableUntil);
   scene.patriota.setVisible(!invulnerable || blinkVisible(time));
 
+  if (scene.sableArc.visible) {
+    scene.sableArc.setPosition(scene.patriota.x, scene.patriota.y);
+  }
+
   const shot = fireTick(isFiring(scene.controls), time, run.nextFireAt);
   run.nextFireAt = shot.nextFireAt;
   if (shot.fire) {
     fireBullet(scene);
     playSound(scene, "shot");
+  }
+
+  const swing = swingTick(isSwinging(scene.controls), time, run.nextSwingAt);
+  run.nextSwingAt = swing.nextSwingAt;
+  if (swing.swing) {
+    swingSable(scene, run.facing);
+    resolveSableHits(scene, run.facing);
+    playSound(scene, "sable");
   }
 }
 
@@ -719,6 +789,32 @@ function fireTick(held, now, nextFireAt) {
     return { fire: false, nextFireAt };
   }
   return { fire: true, nextFireAt: now + FIRE_INTERVAL };
+}
+
+function isSwinging(controls) {
+  return Boolean(controls.held.P1_2 || controls.held.P2_2);
+}
+
+function swingTick(held, now, nextSwingAt) {
+  if (!held || now < nextSwingAt) {
+    return { swing: false, nextSwingAt };
+  }
+  return { swing: true, nextSwingAt: now + SABLE_COOLDOWN };
+}
+
+function inSableArc(px, py, facing, ex, ey) {
+  const dx = ex - px;
+  const dy = ey - py;
+  const length = Math.hypot(dx, dy);
+  if (length > SABLE_RANGE) {
+    return false;
+  }
+  if (length === 0) {
+    return true;
+  }
+  const direction = facingVector(facing);
+  const dot = (dx * direction.x + dy * direction.y) / length;
+  return dot >= Math.cos(SABLE_HALF_ARC);
 }
 
 function bulletOutOfBounds(x, y) {
@@ -923,6 +1019,7 @@ function freshRun() {
     oleada: 1,
     facing: "N",
     nextFireAt: 0,
+    nextSwingAt: 0,
     lives: LIVES_TOTAL,
     invulnerableUntil: 0,
     knock: { x: 0, y: 0 },
@@ -946,12 +1043,16 @@ function startRun(scene) {
   scene.state.run = freshRun();
   clearBullets(scene);
   clearLanceros(scene);
+  scene.tweens.killTweensOf(scene.sableArc);
+  scene.sableArc.setVisible(false);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
   scene.patriota.setRotation(facingRotation("N"));
   scene.patriota.setActive(true).setVisible(true);
 
   refreshHud(scene);
-  scene.hud.status.setText("BOTÓN 1: DISPARAR   START: PAUSA");
+  scene.hud.status.setText(
+    "BOTÓN 1: DISPARAR   BOTÓN 2: SABLE   START: PAUSA",
+  );
   scene.state.phase = "playing";
   scene.physics.resume();
   showOleadaSplash(scene, 1);
@@ -1374,6 +1475,7 @@ function createControlsScreen(scene) {
     "EN COMBATE",
     "JOYSTICK ....... MOVER · MIRAR",
     "BOTÓN 1 ........ DISPARAR (SOSTENER)",
+    "BOTÓN 2 ........ SABLE (GOLPE CERCANO)",
     "",
     "EN PAUSA",
     "JOYSTICK ....... ELEGIR OPCIÓN",
@@ -2044,6 +2146,14 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.start(now);
       osc.stop(now + 0.09);
+    } else if (type === "sable") {
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(1500, now);
+      osc.frequency.exponentialRampToValueAtTime(280, now + 0.13);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
     } else if (type === "hit") {
       osc.type = "square";
       osc.frequency.setValueAtTime(500, now);
