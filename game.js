@@ -1,6 +1,7 @@
 // Platanus Hack 26 — Batalla de Matasiete
-// Un patriota defiende la isla de Margarita contra los Lanceros españoles:
-// flujo completo (título → partida → pausa → derrota → iniciales → mejores
+// Un patriota defiende la isla de Margarita contra los españoles: Lanceros
+// que avanzan de frente y Fusileros que plantan su fusil a media distancia.
+// Flujo completo (título → partida → pausa → derrota → iniciales → mejores
 // puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
 // 3 vidas e invulnerabilidad breve.
 
@@ -21,6 +22,15 @@ const BULLET_MARGIN = 12;
 const LANCERO_SPEED = 64;
 const LANCERO_HP = 2;
 const LANCERO_SCORE = 100;
+const FUSILERO_SPEED = 58;
+const FUSILERO_HP = 2;
+const FUSILERO_SCORE = 200;
+const FUSILERO_RANGE = 230;
+const FUSILERO_FROM_OLEADA = 2;
+const FUSILERO_AIM_MS = 550;
+const FUSILERO_COOLDOWN_MS = 1800;
+const MUSKET_SPEED = 190;
+const MUSKET_HIT_RANGE = 16;
 const OLEADA_BASE_COUNT = 3;
 const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
@@ -178,7 +188,8 @@ function create() {
   createPatriota(scene);
   createBullets(scene);
   createSable(scene);
-  createLanceros(scene);
+  createEspanoles(scene);
+  createMusketBalls(scene);
   createHud(scene);
   createEndGameUi(scene);
   createStartScreen(scene);
@@ -235,8 +246,10 @@ function update(time) {
   if (phase === "playing") {
     updatePatriota(scene, time);
     updateBullets(scene);
-    updateLanceros(scene);
+    updateEspanoles(scene, time);
+    updateMusketBalls(scene);
     resolveBulletHits(scene);
+    resolveMusketHits(scene, time);
     checkContactDamage(scene, time);
     if (scene.state.phase !== "playing") {
       return;
@@ -486,17 +499,28 @@ function resolveSableHits(scene, facing) {
   const px = scene.patriota.x;
   const py = scene.patriota.y;
   let kills = 0;
-  for (const lancero of scene.lanceros.getChildren().slice()) {
-    if (!inSableArc(px, py, facing, lancero.x, lancero.y)) {
+  for (const espanol of scene.espanoles.getChildren().slice()) {
+    if (!inSableArc(px, py, facing, espanol.x, espanol.y)) {
       continue;
     }
-    lancero.destroy();
-    run.score += pointsForKill(lancero.kind);
+    espanol.destroy();
+    run.score += pointsForKill(espanol.kind);
     kills += 1;
+  }
+  let deflected = 0;
+  for (const ball of scene.musketBalls.getChildren().slice()) {
+    if (!inSableArc(px, py, facing, ball.x, ball.y)) {
+      continue;
+    }
+    ball.destroy();
+    deflected += 1;
   }
   if (kills > 0) {
     refreshHud(scene);
     playSound(scene, "kill");
+  }
+  if (deflected > 0) {
+    playSound(scene, "deflect");
   }
 }
 
@@ -520,13 +544,21 @@ function fireBullet(scene) {
   );
 }
 
-function updateBullets(scene) {
-  const children = scene.bullets.getChildren();
+function cullOutOfBounds(group) {
+  const children = group.getChildren();
   for (let i = children.length - 1; i >= 0; i -= 1) {
     if (bulletOutOfBounds(children[i].x, children[i].y)) {
       children[i].destroy();
     }
   }
+}
+
+function updateBullets(scene) {
+  cullOutOfBounds(scene.bullets);
+}
+
+function updateMusketBalls(scene) {
+  cullOutOfBounds(scene.musketBalls);
 }
 
 function clearGroup(group) {
@@ -540,9 +572,19 @@ function clearBullets(scene) {
   clearGroup(scene.bullets);
 }
 
-// --- lanceros en escena -------------------------------------------------------
+function clearMusketBalls(scene) {
+  clearGroup(scene.musketBalls);
+}
 
-function createLanceros(scene) {
+// --- españoles en escena ------------------------------------------------------
+
+function createEspanoles(scene) {
+  drawLanceroTexture(scene);
+  drawFusileroTexture(scene);
+  scene.espanoles = scene.physics.add.group();
+}
+
+function drawLanceroTexture(scene) {
   const g = scene.add.graphics();
 
   g.fillStyle(COLORS.royalist, 1);
@@ -566,31 +608,93 @@ function createLanceros(scene) {
 
   g.generateTexture("lancero", 30, 24);
   g.destroy();
-
-  scene.lanceros = scene.physics.add.group();
 }
 
-function spawnLanceros(scene, count, startIndex = 0) {
-  for (let i = 0; i < count; i += 1) {
-    const spawnIndex = startIndex + i;
-    const point = edgeSpawnPoint(spawnIndex % 4, Phaser.Math.RND.frac());
-    const lancero = scene.lanceros.create(point.x, point.y, "lancero");
-    lancero.setDepth(4);
-    lancero.hp = LANCERO_HP;
-    lancero.kind = "lancero";
-    lancero.facing = facingFromVector(
-      towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
-    );
-    lancero.body.setSize(18, 16);
-    lancero.body.setOffset(5, 4);
-    lancero.body.setAllowGravity(false);
-    lancero.body.setCollideWorldBounds(false);
+function drawFusileroTexture(scene) {
+  const g = scene.add.graphics();
+
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(5, 6, 13, 12, 4);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillRect(6, 11, 11, 2);
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRoundedRect(2, 7, 4, 8, 2);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillRoundedRect(8, 16, 5, 4, 1.5);
+
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRoundedRect(7, 1, 8, 8, 2);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(7, 4, 8, 2);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(13, 12, 5, 6);
+
+  g.fillStyle(COLORS.hat, 1);
+  g.fillRect(15, 11, 4, 3);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(18, 11.5, 12, 2);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(29, 10.5, 29, 13.5, 33, 12);
+
+  g.generateTexture("fusilero", 34, 24);
+  g.destroy();
+}
+
+function createMusketBalls(scene) {
+  const g = scene.add.graphics();
+  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillCircle(6, 6, 4);
+  g.fillStyle(COLORS.stone, 1);
+  g.fillCircle(5, 5, 2);
+  g.generateTexture("balaFusil", 12, 12);
+  g.destroy();
+
+  scene.musketBalls = scene.physics.add.group();
+}
+
+function spawnEspanol(scene, kind, spawnIndex, time) {
+  const point = edgeSpawnPoint(spawnIndex % 4, Phaser.Math.RND.frac());
+  const espanol = scene.espanoles.create(point.x, point.y, kind);
+  espanol.setDepth(4);
+  espanol.kind = kind;
+  espanol.hp = kind === "fusilero" ? FUSILERO_HP : LANCERO_HP;
+  espanol.facing = facingFromVector(
+    towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
+  );
+  espanol.body.setSize(18, 16);
+  espanol.body.setOffset(5, 4);
+  espanol.body.setAllowGravity(false);
+  espanol.body.setCollideWorldBounds(false);
+  if (kind === "fusilero") {
+    espanol.nextShotAt = time + FUSILERO_COOLDOWN_MS;
+    espanol.aimUntil = 0;
   }
+}
+
+function fireMusketBall(scene, fusilero) {
+  const direction = towardVector(
+    fusilero.x,
+    fusilero.y,
+    scene.patriota.x,
+    scene.patriota.y,
+  );
+  const ball = scene.musketBalls.create(
+    fusilero.x + direction.x * 14,
+    fusilero.y + direction.y * 14,
+    "balaFusil",
+  );
+  if (!ball) {
+    return;
+  }
+  ball.setDepth(6);
+  ball.body.setAllowGravity(false);
+  ball.body.setVelocity(direction.x * MUSKET_SPEED, direction.y * MUSKET_SPEED);
 }
 
 function beginOleada(run, oleada, startTime) {
   run.oleada = oleada;
   run.oleadaTotal = oleadaSize(oleada);
+  run.oleadaFusileros = oleadaFusileros(oleada);
   run.oleadaSpawned = 0;
   run.oleadaInterval = oleadaSpawnInterval(oleada);
   run.nextSpawnAt = startTime;
@@ -608,13 +712,18 @@ function scheduleOleadaSpawn(scene, time) {
   }
 
   if (run.oleadaSpawned < run.oleadaTotal && time >= run.nextSpawnAt) {
-    spawnLanceros(scene, 1, run.oleadaSpawned);
+    const kind = spawnKindAt(
+      run.oleadaSpawned,
+      run.oleadaTotal,
+      run.oleadaFusileros,
+    );
+    spawnEspanol(scene, kind, run.oleadaSpawned, time);
     run.oleadaSpawned += 1;
     run.nextSpawnAt = time + run.oleadaInterval;
     return;
   }
 
-  if (isOleadaCleared(run) && scene.lanceros.getLength() === 0) {
+  if (isOleadaCleared(run) && scene.espanoles.getLength() === 0) {
     run.score += oleadaBonus(run.oleada);
     beginOleada(run, run.oleada + 1, time + OLEADA_LULL_MS);
     run.lullUntil = time + OLEADA_LULL_MS;
@@ -625,50 +734,87 @@ function scheduleOleadaSpawn(scene, time) {
   }
 }
 
-function clearLanceros(scene) {
-  clearGroup(scene.lanceros);
+function clearEspanoles(scene) {
+  clearGroup(scene.espanoles);
 }
 
-function updateLanceros(scene) {
+function updateEspanoles(scene, time) {
   const target = scene.patriota;
-  for (const lancero of scene.lanceros.getChildren()) {
-    const direction = towardVector(lancero.x, lancero.y, target.x, target.y);
-    lancero.body.setVelocity(
+  for (const espanol of scene.espanoles.getChildren()) {
+    const direction = towardVector(espanol.x, espanol.y, target.x, target.y);
+    if (espanol.kind === "fusilero") {
+      updateFusilero(scene, espanol, direction, time);
+      continue;
+    }
+    espanol.body.setVelocity(
       direction.x * LANCERO_SPEED,
       direction.y * LANCERO_SPEED,
     );
-    lancero.facing = nextFacing(lancero.facing, direction);
-    lancero.setRotation(facingRotation(lancero.facing));
+    espanol.facing = nextFacing(espanol.facing, direction);
+    espanol.setRotation(facingRotation(espanol.facing));
   }
 }
 
-function flashLancero(scene, lancero) {
-  lancero.setTintFill(0xffffff);
+function updateFusilero(scene, fusilero, direction, time) {
+  const distance = Math.hypot(
+    scene.patriota.x - fusilero.x,
+    scene.patriota.y - fusilero.y,
+  );
+  const planted = distance <= FUSILERO_RANGE;
+
+  fusilero.body.setVelocity(
+    planted ? 0 : direction.x * FUSILERO_SPEED,
+    planted ? 0 : direction.y * FUSILERO_SPEED,
+  );
+  fusilero.facing = nextFacing(fusilero.facing, direction);
+  fusilero.setRotation(facingRotation(fusilero.facing));
+
+  const shot = musketTick(fusilero, planted, time);
+  const wasAiming = fusilero.aimUntil > 0;
+  fusilero.aimUntil = shot.aimUntil;
+  fusilero.nextShotAt = shot.nextShotAt;
+
+  if (shot.aimUntil > 0) {
+    fusilero.setTint(COLORS.accent);
+  } else if (wasAiming) {
+    fusilero.clearTint();
+  }
+  if (shot.aim) {
+    playSound(scene, "aim");
+  }
+  if (shot.fire) {
+    fireMusketBall(scene, fusilero);
+    playSound(scene, "musket");
+  }
+}
+
+function flashEspanol(scene, espanol) {
+  espanol.setTintFill(0xffffff);
   scene.time.delayedCall(70, () => {
-    if (lancero.active) {
-      lancero.clearTint();
+    if (espanol.active) {
+      espanol.clearTint();
     }
   });
 }
 
 function resolveBulletHits(scene) {
   const bullets = scene.bullets.getChildren();
-  const lanceros = scene.lanceros.getChildren();
+  const espanoles = scene.espanoles.getChildren();
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
     const bullet = bullets[i];
-    for (let j = lanceros.length - 1; j >= 0; j -= 1) {
-      const lancero = lanceros[j];
-      if (!withinRange(bullet.x, bullet.y, lancero.x, lancero.y, HIT_RANGE)) {
+    for (let j = espanoles.length - 1; j >= 0; j -= 1) {
+      const espanol = espanoles[j];
+      if (!withinRange(bullet.x, bullet.y, espanol.x, espanol.y, HIT_RANGE)) {
         continue;
       }
       bullet.destroy();
-      lancero.hp = damageAfterBullet(lancero.hp);
-      if (lancero.hp > 0) {
-        flashLancero(scene, lancero);
+      espanol.hp = damageAfterBullet(espanol.hp);
+      if (espanol.hp > 0) {
+        flashEspanol(scene, espanol);
         playSound(scene, "hit");
       } else {
-        lancero.destroy();
-        scene.state.run.score += pointsForKill(lancero.kind);
+        espanol.destroy();
+        scene.state.run.score += pointsForKill(espanol.kind);
         refreshHud(scene);
         playSound(scene, "kill");
       }
@@ -678,30 +824,48 @@ function resolveBulletHits(scene) {
 }
 
 function checkContactDamage(scene, time) {
-  const run = scene.state.run;
   const patriota = scene.patriota;
-  for (const lancero of scene.lanceros.getChildren()) {
+  for (const espanol of scene.espanoles.getChildren()) {
     if (
-      !withinRange(patriota.x, patriota.y, lancero.x, lancero.y, CONTACT_RANGE)
+      !withinRange(patriota.x, patriota.y, espanol.x, espanol.y, CONTACT_RANGE)
     ) {
       continue;
     }
-    const contact = applyContact(run.lives, run.invulnerableUntil, time);
-    if (!contact.hit) {
-      return false;
-    }
-    run.lives = contact.lives;
-    run.invulnerableUntil = contact.invulnerableUntil;
-    run.knock = knockbackVector(patriota.x, patriota.y);
-    run.knockUntil = time + KNOCK_MS;
-    refreshHud(scene);
-    playSound(scene, "hurt");
-    if (isDefeated(run.lives)) {
-      finishRun(scene);
-    }
-    return true;
+    applyDamage(scene, time);
+    return;
   }
-  return false;
+}
+
+function resolveMusketHits(scene, time) {
+  const patriota = scene.patriota;
+  for (const ball of scene.musketBalls.getChildren().slice()) {
+    if (
+      !withinRange(patriota.x, patriota.y, ball.x, ball.y, MUSKET_HIT_RANGE)
+    ) {
+      continue;
+    }
+    ball.destroy();
+    applyDamage(scene, time);
+    return;
+  }
+}
+
+function applyDamage(scene, time) {
+  const run = scene.state.run;
+  const patriota = scene.patriota;
+  const contact = applyContact(run.lives, run.invulnerableUntil, time);
+  if (!contact.hit) {
+    return;
+  }
+  run.lives = contact.lives;
+  run.invulnerableUntil = contact.invulnerableUntil;
+  run.knock = knockbackVector(patriota.x, patriota.y);
+  run.knockUntil = time + KNOCK_MS;
+  refreshHud(scene);
+  playSound(scene, "hurt");
+  if (isDefeated(run.lives)) {
+    finishRun(scene);
+  }
 }
 
 function updatePatriota(scene, time) {
@@ -826,7 +990,31 @@ function bulletOutOfBounds(x, y) {
   );
 }
 
-// --- lanceros, vidas y derrota (lógica pura) ---------------------------------
+// --- españoles, vidas y derrota (lógica pura) --------------------------------
+
+function musketTick(fusilero, planted, now) {
+  const state = {
+    aim: false,
+    fire: false,
+    nextShotAt: fusilero.nextShotAt,
+    aimUntil: fusilero.aimUntil,
+  };
+  if (!planted) {
+    state.aimUntil = 0;
+    return state;
+  }
+  if (state.aimUntil === 0) {
+    if (now >= state.nextShotAt) {
+      state.aim = true;
+      state.aimUntil = now + FUSILERO_AIM_MS;
+    }
+  } else if (now >= state.aimUntil) {
+    state.fire = true;
+    state.aimUntil = 0;
+    state.nextShotAt = now + FUSILERO_COOLDOWN_MS;
+  }
+  return state;
+}
 
 function towardVector(fromX, fromY, toX, toY) {
   const dx = toX - fromX;
@@ -869,7 +1057,13 @@ function damageAfterBullet(hp) {
 }
 
 function pointsForKill(kind) {
-  return kind === "lancero" ? LANCERO_SCORE : 0;
+  if (kind === "lancero") {
+    return LANCERO_SCORE;
+  }
+  if (kind === "fusilero") {
+    return FUSILERO_SCORE;
+  }
+  return 0;
 }
 
 // --- director de oleadas (lógica pura) ---------------------------------------
@@ -891,6 +1085,27 @@ function oleadaSpawnInterval(oleada) {
 
 function oleadaBonus(oleada) {
   return oleada > 0 ? OLEADA_BONUS * oleada : 0;
+}
+
+function oleadaFusileros(oleada) {
+  if (oleada < FUSILERO_FROM_OLEADA) {
+    return 0;
+  }
+  return Math.min(
+    Math.floor(oleada / 2),
+    Math.floor(oleadaSize(oleada) / 2),
+  );
+}
+
+function spawnKindAt(index, total, fusileroCount) {
+  if (fusileroCount <= 0 || total <= 0) {
+    return "lancero";
+  }
+  const ahead = total - index;
+  const fusilero =
+    Math.floor((ahead * fusileroCount) / total) >
+    Math.floor(((ahead - 1) * fusileroCount) / total);
+  return fusilero ? "fusilero" : "lancero";
 }
 
 function isOleadaCleared(run) {
@@ -1042,7 +1257,8 @@ function startRun(scene) {
 
   scene.state.run = freshRun();
   clearBullets(scene);
-  clearLanceros(scene);
+  clearMusketBalls(scene);
+  clearEspanoles(scene);
   scene.tweens.killTweensOf(scene.sableArc);
   scene.sableArc.setVisible(false);
   scene.patriota.body.reset(GAME_WIDTH / 2, GAME_HEIGHT / 2);
@@ -1085,7 +1301,8 @@ function finishRun(scene) {
   scene.patriota.body.setVelocity(0, 0);
   scene.patriota.setVisible(true);
   clearBullets(scene);
-  clearLanceros(scene);
+  clearMusketBalls(scene);
+  clearEspanoles(scene);
   scene.physics.pause();
   clearPressedControls(scene);
   scene.state.phase = "gameover";
@@ -2146,6 +2363,30 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
       osc.start(now);
       osc.stop(now + 0.09);
+    } else if (type === "aim") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.exponentialRampToValueAtTime(840, now + 0.3);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc.start(now);
+      osc.stop(now + 0.32);
+    } else if (type === "musket") {
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(240, now);
+      osc.frequency.exponentialRampToValueAtTime(55, now + 0.2);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } else if (type === "deflect") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(1500, now);
+      osc.frequency.exponentialRampToValueAtTime(2600, now + 0.08);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.start(now);
+      osc.stop(now + 0.1);
     } else if (type === "sable") {
       osc.type = "triangle";
       osc.frequency.setValueAtTime(1500, now);
