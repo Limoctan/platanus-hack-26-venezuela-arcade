@@ -1,6 +1,7 @@
 // Platanus Hack 26 — Batalla de Matasiete
 // Un patriota defiende la isla de Margarita contra los españoles: Lanceros
-// que avanzan de frente y Fusileros que plantan su fusil a media distancia.
+// que avanzan de frente, Fusileros que plantan su fusil a media distancia y
+// Jinetes que embisten por los costados a todo galope.
 // Flujo completo (título → partida → pausa → derrota → iniciales → mejores
 // puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
 // 3 vidas e invulnerabilidad breve.
@@ -31,6 +32,13 @@ const FUSILERO_AIM_MS = 550;
 const FUSILERO_COOLDOWN_MS = 1800;
 const MUSKET_SPEED = 190;
 const MUSKET_HIT_RANGE = 16;
+const JINETE_SPEED = 150;
+const JINETE_HP = 1;
+const JINETE_SCORE = 150;
+const JINETE_FROM_OLEADA = 3;
+const JINETE_DASH_SPEED = 320;
+const JINETE_DASH_MS = 450;
+const JINETE_EDGES = [1, 3];
 const OLEADA_BASE_COUNT = 3;
 const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
@@ -83,6 +91,8 @@ const COLORS = {
   royalist: 0x3c5a8e,
   royalistDark: 0x2a4066,
   trim: 0xe8e4d8,
+  horse: 0x6b4a2f,
+  horseDark: 0x432e1c,
 };
 
 const DEFEAT_LINES = [
@@ -581,6 +591,7 @@ function clearMusketBalls(scene) {
 function createEspanoles(scene) {
   drawLanceroTexture(scene);
   drawFusileroTexture(scene);
+  drawJineteTexture(scene);
   scene.espanoles = scene.physics.add.group();
 }
 
@@ -640,6 +651,54 @@ function drawFusileroTexture(scene) {
   g.destroy();
 }
 
+// El Jinete va montado a caballo, de perfil y mirando al este como el resto;
+// el sprite entero gira con la dirección de su embestida.
+function drawJineteTexture(scene) {
+  const g = scene.add.graphics();
+
+  g.fillStyle(COLORS.horseDark, 1);
+  g.fillRect(11, 24, 3, 6);
+  g.fillRect(16, 24, 3, 6);
+  g.fillRect(25, 24, 3, 6);
+  g.fillRect(30, 24, 3, 6);
+  g.fillTriangle(10, 16, 2, 13, 3, 22);
+
+  g.fillStyle(COLORS.horse, 1);
+  g.fillRoundedRect(8, 15, 27, 10, 5);
+  g.fillRoundedRect(31, 9, 7, 9, 3);
+  g.fillRoundedRect(35, 8, 8, 6, 2.5);
+  g.fillTriangle(32, 9, 34, 4, 37, 9);
+
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(41, 9, 3, 2);
+
+  g.fillStyle(COLORS.sash, 1);
+  g.fillRect(18, 13, 9, 4);
+
+  g.lineStyle(2, COLORS.frame, 1);
+  g.beginPath();
+  g.moveTo(16, 13);
+  g.lineTo(41, 4);
+  g.strokePath();
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(41, 2.5, 41, 6, 43, 4.25);
+
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(19, 5, 8, 9, 2);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillRect(20, 8, 6, 2);
+
+  g.fillStyle(COLORS.skin, 1);
+  g.fillCircle(23, 4, 3);
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRoundedRect(19, 0, 8, 4, 2);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(19, 3, 8, 1);
+
+  g.generateTexture("jinete", 44, 30);
+  g.destroy();
+}
+
 function createMusketBalls(scene) {
   const g = scene.add.graphics();
   g.fillStyle(COLORS.stoneDark, 1);
@@ -653,21 +712,33 @@ function createMusketBalls(scene) {
 }
 
 function spawnEspanol(scene, kind, spawnIndex, time) {
-  const point = edgeSpawnPoint(spawnIndex % 4, Phaser.Math.RND.frac());
+  const point = edgeSpawnPoint(
+    spawnEdgeFor(kind, spawnIndex),
+    Phaser.Math.RND.frac(),
+  );
   const espanol = scene.espanoles.create(point.x, point.y, kind);
   espanol.setDepth(4);
   espanol.kind = kind;
-  espanol.hp = kind === "fusilero" ? FUSILERO_HP : LANCERO_HP;
+  espanol.hp = hpForKind(kind);
   espanol.facing = facingFromVector(
     towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
   );
-  espanol.body.setSize(18, 16);
-  espanol.body.setOffset(5, 4);
+  if (kind === "jinete") {
+    espanol.body.setSize(22, 16);
+    espanol.body.setOffset(11, 7);
+  } else {
+    espanol.body.setSize(18, 16);
+    espanol.body.setOffset(5, 4);
+  }
   espanol.body.setAllowGravity(false);
   espanol.body.setCollideWorldBounds(false);
   if (kind === "fusilero") {
     espanol.nextShotAt = time + FUSILERO_COOLDOWN_MS;
     espanol.aimUntil = 0;
+  }
+  if (kind === "jinete") {
+    espanol.dashDir = { x: point.x < GAME_WIDTH / 2 ? 1 : -1, y: 0 };
+    espanol.dashUntil = time + JINETE_DASH_MS;
   }
 }
 
@@ -695,7 +766,9 @@ function beginOleada(run, oleada, startTime) {
   run.oleada = oleada;
   run.oleadaTotal = oleadaSize(oleada);
   run.oleadaFusileros = oleadaFusileros(oleada);
+  run.oleadaJinetes = oleadaJinetes(oleada);
   run.oleadaSpawned = 0;
+  run.oleadaJinetesSpawned = 0;
   run.oleadaInterval = oleadaSpawnInterval(oleada);
   run.nextSpawnAt = startTime;
 }
@@ -716,8 +789,15 @@ function scheduleOleadaSpawn(scene, time) {
       run.oleadaSpawned,
       run.oleadaTotal,
       run.oleadaFusileros,
+      run.oleadaJinetes,
     );
-    spawnEspanol(scene, kind, run.oleadaSpawned, time);
+    // Cada Jinete usa su propio ordinal para alternar de costado.
+    const spawnIndex =
+      kind === "jinete" ? run.oleadaJinetesSpawned : run.oleadaSpawned;
+    if (kind === "jinete") {
+      run.oleadaJinetesSpawned += 1;
+    }
+    spawnEspanol(scene, kind, spawnIndex, time);
     run.oleadaSpawned += 1;
     run.nextSpawnAt = time + run.oleadaInterval;
     return;
@@ -746,6 +826,10 @@ function updateEspanoles(scene, time) {
       updateFusilero(scene, espanol, direction, time);
       continue;
     }
+    if (espanol.kind === "jinete") {
+      updateJinete(espanol, direction, time);
+      continue;
+    }
     espanol.body.setVelocity(
       direction.x * LANCERO_SPEED,
       direction.y * LANCERO_SPEED,
@@ -753,6 +837,17 @@ function updateEspanoles(scene, time) {
     espanol.facing = nextFacing(espanol.facing, direction);
     espanol.setRotation(facingRotation(espanol.facing));
   }
+}
+
+// El Jinete entra comprometido en una embestida lateral y, al agotarse,
+// persigue al Patriota a galope tendido.
+function updateJinete(jinete, direction, time) {
+  const dashing = jineteTick(jinete, time).dashing;
+  const vector = dashing ? jinete.dashDir : direction;
+  const speed = dashing ? JINETE_DASH_SPEED : JINETE_SPEED;
+  jinete.body.setVelocity(vector.x * speed, vector.y * speed);
+  jinete.facing = nextFacing(jinete.facing, vector);
+  jinete.setRotation(facingRotation(jinete.facing));
 }
 
 function updateFusilero(scene, fusilero, direction, time) {
@@ -1016,6 +1111,10 @@ function musketTick(fusilero, planted, now) {
   return state;
 }
 
+function jineteTick(jinete, now) {
+  return { dashing: now < jinete.dashUntil };
+}
+
 function towardVector(fromX, fromY, toX, toY) {
   const dx = toX - fromX;
   const dy = toY - fromY;
@@ -1024,6 +1123,15 @@ function towardVector(fromX, fromY, toX, toY) {
   }
   const length = Math.hypot(dx, dy);
   return { x: dx / length, y: dy / length };
+}
+
+// Los Jinetes solo entran por los costados (derecha 1, izquierda 3); la
+// infantería sigue repartiéndose por los cuatro bordes.
+function spawnEdgeFor(kind, spawnIndex) {
+  if (kind === "jinete") {
+    return JINETE_EDGES[spawnIndex % JINETE_EDGES.length];
+  }
+  return spawnIndex % 4;
 }
 
 function edgeSpawnPoint(edge, t) {
@@ -1056,12 +1164,25 @@ function damageAfterBullet(hp) {
   return Math.max(0, hp - 1);
 }
 
+function hpForKind(kind) {
+  if (kind === "jinete") {
+    return JINETE_HP;
+  }
+  if (kind === "fusilero") {
+    return FUSILERO_HP;
+  }
+  return LANCERO_HP;
+}
+
 function pointsForKill(kind) {
   if (kind === "lancero") {
     return LANCERO_SCORE;
   }
   if (kind === "fusilero") {
     return FUSILERO_SCORE;
+  }
+  if (kind === "jinete") {
+    return JINETE_SCORE;
   }
   return 0;
 }
@@ -1097,15 +1218,39 @@ function oleadaFusileros(oleada) {
   );
 }
 
-function spawnKindAt(index, total, fusileroCount) {
-  if (fusileroCount <= 0 || total <= 0) {
+function oleadaJinetes(oleada) {
+  if (oleada < JINETE_FROM_OLEADA) {
+    return 0;
+  }
+  return Math.min(
+    Math.floor((oleada - 1) / 2),
+    Math.floor(oleadaSize(oleada) / 3),
+  );
+}
+
+// Bresenham: dado un hueco y cuántos aciertos repartir en total, decide si
+// aquí cae uno. Reparte los especiales con espaciado parejo en la oleada.
+function spaced(ahead, hits, total) {
+  return (
+    Math.floor((ahead * hits) / total) > Math.floor(((ahead - 1) * hits) / total)
+  );
+}
+
+// Reparte los españoles especiales dentro de la oleada: primero elige en qué
+// posiciones aparecen y luego si el hueco es Jinete o Fusilero.
+function spawnKindAt(index, total, fusileroCount, jineteCount = 0) {
+  const specialCount = fusileroCount + jineteCount;
+  if (specialCount <= 0 || total <= 0) {
     return "lancero";
   }
   const ahead = total - index;
-  const fusilero =
-    Math.floor((ahead * fusileroCount) / total) >
-    Math.floor(((ahead - 1) * fusileroCount) / total);
-  return fusilero ? "fusilero" : "lancero";
+  if (!spaced(ahead, specialCount, total)) {
+    return "lancero";
+  }
+  const specialsAhead = Math.floor((ahead * specialCount) / total);
+  const isJinete =
+    jineteCount > 0 && spaced(specialsAhead, jineteCount, specialCount);
+  return isJinete ? "jinete" : "fusilero";
 }
 
 function isOleadaCleared(run) {
