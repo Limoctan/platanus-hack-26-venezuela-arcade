@@ -6,6 +6,9 @@
 // puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
 // 3 vidas e invulnerabilidad breve. Las iniciales solo se piden cuando la
 // puntuación entra en la tabla; la derrota arenga a volver a la carga.
+// Chiptune procedural con Web Audio: fanfarria y tema en el título, marcha en
+// bucle durante el combate (batería incluida) y un golpe de derrota con la
+// pista detenida. Sin archivos: todo se programa nota por nota en tiempo real.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
@@ -51,6 +54,8 @@ const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
 const OLEADA_SPEED_CAP = 1.5;
 const OLEADA_SPEED_STEP = 0.1;
+const OLEADA_ENEMY_STEP = 0.05;
+const OLEADA_ENEMY_CAP = 1.3;
 const OLEADA_LULL_MS = 1500;
 const OLEADA_BONUS = 50;
 const CONTACT_RANGE = 16;
@@ -62,6 +67,7 @@ const KNOCK_SPEED = 400;
 const KNOCK_MS = 200;
 const SPAWN_MARGIN = 60;
 const SPAWN_OFFSET = 16;
+const MUSIC_DUCK = 0.35;
 
 const FACING_ROTATION = {
   E: 0,
@@ -201,6 +207,10 @@ function create() {
       confirmCooldownUntil: 0,
       lastMoveVector: { x: 0, y: 0 },
     },
+    audioUnlocked: false,
+    audioGen: 0,
+    musicKind: null,
+    musicOut: null,
   };
 
   createStage(scene);
@@ -931,19 +941,20 @@ function clearEspanoles(scene) {
 
 function updateEspanoles(scene, time) {
   const target = scene.patriota;
+  const enemyScale = oleadaEnemySpeed(scene.state.run.oleada);
   for (const espanol of scene.espanoles.getChildren()) {
     const direction = towardVector(espanol.x, espanol.y, target.x, target.y);
     if (espanol.kind === "fusilero") {
-      updateFusilero(scene, espanol, direction, time);
+      updateFusilero(scene, espanol, direction, time, enemyScale);
       continue;
     }
     if (espanol.kind === "jinete") {
-      updateJinete(espanol, direction, time);
+      updateJinete(espanol, direction, time, enemyScale);
       continue;
     }
     espanol.body.setVelocity(
-      direction.x * LANCERO_SPEED,
-      direction.y * LANCERO_SPEED,
+      direction.x * LANCERO_SPEED * enemyScale,
+      direction.y * LANCERO_SPEED * enemyScale,
     );
     espanol.facing = nextFacing(espanol.facing, direction);
     espanol.setRotation(facingRotation(espanol.facing));
@@ -952,10 +963,11 @@ function updateEspanoles(scene, time) {
 
 // El Jinete entra comprometido en una embestida lateral y, al agotarse,
 // persigue al Patriota a galope tendido.
-function updateJinete(jinete, direction, time) {
+function updateJinete(jinete, direction, time, speedScale) {
+  const enemyScale = speedScale || 1;
   const dashing = jineteTick(jinete, time).dashing;
   const vector = dashing ? jinete.dashDir : direction;
-  const speed = dashing ? JINETE_DASH_SPEED : JINETE_SPEED;
+  const speed = (dashing ? JINETE_DASH_SPEED : JINETE_SPEED) * enemyScale;
   jinete.body.setVelocity(vector.x * speed, vector.y * speed);
   // El caballo siempre se ve erguido: no se rota el sprite, solo se refleja
   // en horizontal cuando su rumbo apunta hacia el oeste.
@@ -964,7 +976,8 @@ function updateJinete(jinete, direction, time) {
   }
 }
 
-function updateFusilero(scene, fusilero, direction, time) {
+function updateFusilero(scene, fusilero, direction, time, speedScale) {
+  const approach = FUSILERO_SPEED * (speedScale || 1);
   const distance = Math.hypot(
     scene.patriota.x - fusilero.x,
     scene.patriota.y - fusilero.y,
@@ -972,8 +985,8 @@ function updateFusilero(scene, fusilero, direction, time) {
   const planted = distance <= FUSILERO_RANGE;
 
   fusilero.body.setVelocity(
-    planted ? 0 : direction.x * FUSILERO_SPEED,
-    planted ? 0 : direction.y * FUSILERO_SPEED,
+    planted ? 0 : direction.x * approach,
+    planted ? 0 : direction.y * approach,
   );
   fusilero.facing = nextFacing(fusilero.facing, direction);
   fusilero.setRotation(facingRotation(fusilero.facing));
@@ -1345,17 +1358,32 @@ function oleadaSpawnInterval(oleada) {
   return Math.round(OLEADA_SPAWN_MS / oleadaSpawnSpeed(oleada));
 }
 
+// Leve apuro en el paso de los españoles: cada oleada los une un 5 % hasta un
+// tope firme de 1.3x. El Patriota (170 px/s) nunca deja de correr más que
+// ellos, pero de la oleada 7 en adelante el margen se siente.
+function oleadaEnemySpeed(oleada) {
+  return Math.min(
+    1 + Math.max(0, oleada - 1) * OLEADA_ENEMY_STEP,
+    OLEADA_ENEMY_CAP,
+  );
+}
+
 function oleadaBonus(oleada) {
   return oleada > 0 ? OLEADA_BONUS * oleada : 0;
 }
 
+// Presupuesto de legibilidad: los Fusileros ocupan a lo sumo un tercio de la
+// oleada y los Jinetes un cuarto; el resto queda de Lancero y así siempre hay
+// filas de a pie que avanzan de frente. Con eso la mezcla se estanca en
+// ~55 % de especialistas a lo más, y pasada la oleada 10 solo crecen la
+// cadencia de aparición (tope 1.5x) y el paso (tope 1.3x).
 function oleadaFusileros(oleada) {
   if (oleada < FUSILERO_FROM_OLEADA) {
     return 0;
   }
   return Math.min(
-    Math.floor(oleada / 2),
-    Math.floor(oleadaSize(oleada) / 2),
+    Math.floor((oleada + 1) / 3),
+    Math.floor(oleadaSize(oleada) / 3),
   );
 }
 
@@ -1365,7 +1393,7 @@ function oleadaJinetes(oleada) {
   }
   return Math.min(
     Math.floor((oleada - 1) / 2),
-    Math.floor(oleadaSize(oleada) / 3),
+    Math.floor(oleadaSize(oleada) / 4),
   );
 }
 
@@ -1627,6 +1655,7 @@ function startRun(scene) {
   scene.physics.resume();
   showOleadaSplash(scene, 1);
   playSound(scene, "oleada");
+  startMusic(scene, "battle");
 }
 
 function pauseRun(scene) {
@@ -1637,6 +1666,7 @@ function pauseRun(scene) {
   scene.state.pauseMenu = { cursor: 0, cooldown: 0, lastAxis: 0 };
   updateMenuHighlight(scene.pauseScreen.buttons, 0);
   scene.pauseScreen.container.setVisible(true);
+  duckMusic(scene, true);
 }
 
 function resumeRun(scene) {
@@ -1644,6 +1674,7 @@ function resumeRun(scene) {
   scene.pauseScreen.container.setVisible(false);
   scene.physics.resume();
   scene.state.phase = "playing";
+  duckMusic(scene, false);
 }
 
 function finishRun(scene) {
@@ -1695,6 +1726,7 @@ function finishRun(scene) {
       "NO ENTRÓ EN LA TABLA. START: OTRA PARTIDA · BOTÓN 1: TÍTULO";
   }
   scene.endGame.saveStatus.setText(scene.state.saveStatus);
+  stopMusic(scene);
   playSound(scene, "defeat");
 }
 
@@ -1727,6 +1759,14 @@ function createControls(scene) {
     const arcadeCode = KEYBOARD_TO_ARCADE[key];
     if (!arcadeCode) {
       return;
+    }
+    // Primera tecla del gabinete: despierta el audio y arranca el tema del
+    // título (los navegadores mantienen el sonido dormido hasta el primer gesto).
+    if (!scene.state.audioUnlocked) {
+      scene.state.audioUnlocked = true;
+      if (scene.state.phase === "start") {
+        playTitleTheme(scene);
+      }
     }
     if (!scene.controls.held[arcadeCode]) {
       scene.controls.pressed[arcadeCode] = true;
@@ -1953,6 +1993,9 @@ function showStartScreen(scene) {
   refreshStartScreenLeaderboard(scene);
   updateMenuHighlight(scene.startScreen.buttons, scene.state.menu.cursor);
   scene.startScreen.container.setVisible(true);
+  // Vuelta al título: la fanfarria y el tema vuelven a sonar (de todo lo que
+  // ya se alzaron, la generación del motor descarta las cadenas viejas).
+  playTitleTheme(scene);
 }
 
 function handleStartMenu(scene, time) {
@@ -1965,7 +2008,6 @@ function handleStartMenu(scene, time) {
 
   if (consumeAnyPressedControl(scene, ["P1_1", "P2_1", "START1", "START2"])) {
     playSound(scene, "select");
-    startAmbientMusic(scene);
     if (menu.cursor === 0) {
       startRun(scene);
     } else if (menu.cursor === 1) {
@@ -2613,110 +2655,294 @@ async function storageSet(key, value) {
 
 // --- audio --------------------------------------------------------------------
 
-function startAmbientMusic(scene) {
-  if (scene.state.musicStarted) {
+// Chiptune procedural: cada pista es una progresión escrita en MIDI (0 =
+// silencio) sobre Am–F–C–G, programada nota por nota con Web Audio. La
+// generación invalida la repetición cuando suena el siguiente estado, así dos
+// pistas jamás quedan encimadas y la derrota deja el salón en silencio.
+
+const TRACK_TITLE = {
+  step: 0.3,
+  drums: false,
+  leadType: "triangle",
+  leadVol: 0.05,
+  lead: [
+    69, 0, 72, 0, 76, 0, 72, 0,
+    65, 0, 69, 0, 72, 0, 69, 0,
+    72, 0, 76, 0, 79, 0, 76, 0,
+    81, 0, 79, 0, 76, 0, 72, 0,
+  ],
+  bass: [
+    33, 0, 0, 0, 0, 0, 0, 0,
+    29, 0, 0, 0, 0, 0, 0, 0,
+    36, 0, 0, 0, 0, 0, 0, 0,
+    31, 0, 0, 0, 0, 0, 0, 0,
+  ],
+};
+
+const TRACK_BATTLE = {
+  step: 0.21,
+  drums: true,
+  leadType: "square",
+  leadVol: 0.055,
+  lead: [
+    69, 0, 72, 0, 76, 0, 72, 0,
+    65, 0, 69, 0, 72, 0, 69, 0,
+    72, 0, 76, 0, 79, 0, 81, 0,
+    74, 0, 71, 0, 67, 0, 71, 0,
+    69, 0, 72, 76, 79, 0, 76, 0,
+    65, 0, 69, 72, 77, 0, 72, 0,
+    72, 0, 76, 79, 84, 0, 81, 0,
+    79, 0, 76, 0, 74, 0, 71, 0,
+  ],
+  // El bajo camina por las raíces de la progresión: negras en la primera
+  // vuelta, con corchea extra cuando el tema arranca a galopar (compases 5-8).
+  bass: (() => {
+    const bass = new Array(64).fill(0);
+    [33, 29, 36, 31, 33, 29, 36, 31].forEach((root, bar) => {
+      for (const hit of bar < 4 ? [0, 2, 4] : [0, 2, 4, 6]) {
+        bass[bar * 8 + hit] = root;
+      }
+    });
+    return bass;
+  })(),
+};
+
+function audioContext(scene) {
+  try {
+    const ctx =
+      scene.sound && scene.sound.context
+        ? scene.sound.context
+        : new AudioContext();
+    if (ctx.state === "suspended" && ctx.resume) {
+      ctx.resume();
+    }
+    return ctx;
+  } catch (_) {
+    return null;
+  }
+}
+
+function midiFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function tone(ctx, out, freq, t, len, type, vol) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  osc.connect(g);
+  g.connect(out);
+  osc.start(t);
+  osc.stop(t + len + 0.02);
+}
+
+function kickDrum(ctx, out, t) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+  g.gain.setValueAtTime(0.4, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  osc.connect(g);
+  g.connect(out);
+  osc.start(t);
+  osc.stop(t + 0.14);
+}
+
+function hatTick(ctx, out, t, noise) {
+  const src = ctx.createBufferSource();
+  src.buffer = noise;
+  const f = ctx.createBiquadFilter();
+  const g = ctx.createGain();
+  f.type = "highpass";
+  f.frequency.value = 6500;
+  g.gain.setValueAtTime(0.09, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  src.connect(f);
+  f.connect(g);
+  g.connect(out);
+  src.start(t);
+  src.stop(t + 0.06);
+}
+
+function stopMusic(scene) {
+  scene.state.audioGen += 1;
+  scene.state.musicKind = null;
+  const out = scene.state.musicOut;
+  scene.state.musicOut = null;
+  if (!out) {
     return;
   }
-  scene.state.musicStarted = true;
-
   try {
-    const ctx = scene.sound.context;
-    if (!ctx) {
+    rampGain(out, scene.sound.context, 0.0005, 0.3);
+  } catch (_) {
+    try {
+      out.disconnect();
+    } catch (_again) {}
+    return;
+  }
+  scene.time.delayedCall(320, () => {
+    try {
+      out.disconnect();
+    } catch (_) {}
+  });
+}
+
+// El puño del volumen: toda la música pasa por aquí, en pausa y al apagarse.
+function rampGain(out, ctx, target, seconds) {
+  const now = ctx.currentTime;
+  out.gain.cancelScheduledValues(now);
+  out.gain.setValueAtTime(Math.max(0.0005, out.gain.value), now);
+  out.gain.exponentialRampToValueAtTime(Math.max(0.0005, target), now + seconds);
+}
+
+// En pausa la música se baja, no se corta: la sala sigue viva tras el overlay.
+function duckMusic(scene, ducked) {
+  const out = scene.state.musicOut;
+  const ctx = scene.sound && scene.sound.context;
+  if (!out || !ctx) {
+    return;
+  }
+  try {
+    rampGain(out, ctx, ducked ? MUSIC_DUCK : 1, 0.2);
+  } catch (_) {}
+}
+
+function startMusic(scene, kind, delaySec) {
+  if (scene.state.musicKind === kind) {
+    return;
+  }
+  const ctx = audioContext(scene);
+  if (!ctx) {
+    return;
+  }
+  if (ctx.state !== "running") {
+    // Sin gesto del usuario el contexto queda dormido: se reintenta hasta que
+    // la primera tecla del gabinete lo despierte.
+    const gen = scene.state.audioGen;
+    scene.time.delayedCall(250, () => {
+      if (scene.state.audioGen === gen && !scene.state.musicKind) {
+        startMusic(scene, kind, delaySec);
+      }
+    });
+    return;
+  }
+  stopMusic(scene);
+  const gen = scene.state.audioGen;
+  const track = kind === "battle" ? TRACK_BATTLE : TRACK_TITLE;
+  const out = ctx.createGain();
+  out.gain.value = 1;
+  out.connect(ctx.destination);
+  scene.state.musicOut = out;
+  scene.state.musicKind = kind;
+
+  const noise = ctx.createBuffer(1, 2048, ctx.sampleRate);
+  const data = noise.getChannelData(0);
+  for (let i = 0; i < 2048; i += 1) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const barMs = Math.round(track.step * 8 * 1000);
+  const scheduleBar = (bar, audioTime) => {
+    if (gen !== scene.state.audioGen) {
       return;
     }
+    for (let i = 0; i < 8; i += 1) {
+      const step = bar * 8 + i;
+      const at = audioTime + i * track.step;
+      const lead = track.lead[step % track.lead.length];
+      if (lead) {
+        tone(
+          ctx,
+          out,
+          midiFreq(lead),
+          at,
+          track.step * 0.9,
+          track.leadType,
+          track.leadVol,
+        );
+      }
+      const bass = track.bass[step % track.bass.length];
+      if (bass) {
+        tone(ctx, out, midiFreq(bass), at, track.step * 1.7, "triangle", 0.14);
+      }
+      if (track.drums) {
+        if (step % 4 === 0) {
+          kickDrum(ctx, out, at);
+        }
+        if (step % 4 === 2) {
+          hatTick(ctx, out, at, noise);
+        }
+      }
+    }
+    // La barra siguiente ya está en el reloj de audio: aunque el navegador
+    // estrangule los callbacks, el compás no se corta ni se atrasa.
+    scene.time.delayedCall(barMs, () =>
+      scheduleBar(bar + 1, audioTime + track.step * 8),
+    );
+  };
+  scheduleBar(0, ctx.currentTime + 0.06 + (delaySec || 0));
+}
 
-    const out = ctx.createGain();
-    out.gain.value = 0.16;
-    out.connect(ctx.destination);
+// Fanfarria de farola del título: A A A → E → D → A con pedal de A abajo.
+function playTitleJingle(scene) {
+  const ctx = audioContext(scene);
+  if (!ctx || ctx.state !== "running") {
+    return;
+  }
+  const out = ctx.createGain();
+  out.gain.value = 0.9;
+  out.connect(ctx.destination);
+  const notes = [
+    [69, 0, 0.11],
+    [69, 0.13, 0.11],
+    [76, 0.26, 0.11],
+    [81, 0.39, 0.5],
+    [80, 0.95, 0.12],
+    [81, 1.1, 0.6],
+  ];
+  const t0 = ctx.currentTime + 0.05;
+  for (const [midi, at, len] of notes) {
+    tone(ctx, out, midiFreq(midi), t0 + at, len, "square", 0.09);
+  }
+  tone(ctx, out, midiFreq(45), t0, 1.7, "triangle", 0.1);
+  scene.time.delayedCall(2100, () => {
+    try {
+      out.disconnect();
+    } catch (_) {}
+  });
+}
 
-    const dly = ctx.createDelay(2);
-    const dlFb = ctx.createGain();
-    dly.delayTime.value = 0.48;
-    dlFb.gain.value = 0.28;
-    dly.connect(dlFb);
-    dlFb.connect(dly);
-    dlFb.connect(out);
-
-    const padFilt = ctx.createBiquadFilter();
-    padFilt.type = "lowpass";
-    padFilt.frequency.value = 800;
-    padFilt.Q.value = 1.4;
-    padFilt.connect(out);
-    padFilt.connect(dly);
-
-    const lfo = ctx.createOscillator();
-    const lfoG = ctx.createGain();
-    lfo.frequency.value = 0.055;
-    lfoG.gain.value = 430;
-    lfo.connect(lfoG);
-    lfoG.connect(padFilt.frequency);
-    lfo.start();
-
-    [
-      [110, 0, "sawtooth"],
-      [110, 11, "sawtooth"],
-      [110, -11, "sawtooth"],
-      [130.81, 0, "triangle"],
-      [164.81, 5, "triangle"],
-      [196, -4, "triangle"],
-    ].forEach(([f, d, type]) => {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = f;
-      osc.detune.value = d;
-      g.gain.value = 0.028;
-      osc.connect(g);
-      g.connect(padFilt);
-      osc.start();
+function playTitleTheme(scene) {
+  if (scene.state.musicKind === "title") {
+    return;
+  }
+  const ctx = audioContext(scene);
+  if (!ctx) {
+    return;
+  }
+  if (ctx.state !== "running") {
+    // Igual que en la batalla: sin gesto no hay audio, se reintenta hasta que
+    // la primera tecla del gabinete lo despierte y sigamos en el título.
+    const gen = scene.state.audioGen;
+    scene.time.delayedCall(250, () => {
+      if (
+        scene.state.audioGen === gen &&
+        !scene.state.musicKind &&
+        scene.state.phase === "start"
+      ) {
+        playTitleTheme(scene);
+      }
     });
-
-    const ARP = [
-      220, 261.63, 293.66, 329.63, 392, 440, 392, 329.63, 293.66, 261.63,
-    ];
-    const STEP = 0.43;
-    const ALEN = ARP.length * STEP;
-
-    function scheduleArp(t0) {
-      ARP.forEach((freq, i) => {
-        const t = t0 + i * STEP;
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.value = freq;
-        osc.connect(g);
-        g.connect(out);
-        g.connect(dly);
-        g.gain.setValueAtTime(0.001, t);
-        g.gain.linearRampToValueAtTime(0.044, t + 0.018);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + STEP * 0.65);
-        osc.start(t);
-        osc.stop(t + STEP * 0.72);
-      });
-      scene.time.delayedCall((ALEN - 0.06) * 1000, () =>
-        scheduleArp(t0 + ALEN),
-      );
-    }
-
-    const BEAT = 1.0;
-    function scheduleBass(t) {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = 55;
-      osc.connect(g);
-      g.connect(out);
-      g.gain.setValueAtTime(0.26, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-      osc.start(t);
-      osc.stop(t + 0.55);
-      scene.time.delayedCall(BEAT * 1000, () => scheduleBass(t + BEAT));
-    }
-
-    const t0 = ctx.currentTime + 0.3;
-    scheduleArp(t0);
-    scheduleBass(t0);
-  } catch (_) {}
+    return;
+  }
+  playTitleJingle(scene);
+  startMusic(scene, "title", 1.8);
 }
 
 function playSound(scene, type) {
@@ -2855,13 +3081,18 @@ function playSound(scene, type) {
       osc.start(now);
       osc.stop(now + 0.34);
     } else if (type === "defeat") {
+      // Pito de corneta que se rinde: A → F → D → A y caída final.
       osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(330, now);
-      osc.frequency.exponentialRampToValueAtTime(70, now + 0.6);
-      gain.gain.setValueAtTime(0.22, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.setValueAtTime(349, now + 0.16);
+      osc.frequency.setValueAtTime(293, now + 0.32);
+      osc.frequency.setValueAtTime(220, now + 0.48);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.95);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.setValueAtTime(0.16, now + 0.6);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
       osc.start(now);
-      osc.stop(now + 0.65);
+      osc.stop(now + 1.05);
     }
   } catch (_) {}
 }
