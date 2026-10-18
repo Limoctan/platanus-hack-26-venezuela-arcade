@@ -197,6 +197,10 @@ function mockJinete(overrides = {}) {
     setRotation(rotation) {
       jinete.rotation = rotation;
     },
+    flipX: null,
+    setFlipX(flipX) {
+      jinete.flipX = flipX;
+    },
     ...overrides,
   };
   return jinete;
@@ -214,26 +218,51 @@ test('updateJinete homes on the Patriota once the dash is spent', () => {
   assert.deepEqual(jinete.velocity, { x: 0, y: JINETE_SPEED });
 });
 
-test('updateJinete turns to face the way it dashes and then pursues', () => {
-  const jinete = mockJinete({ dashUntil: 400, dashDir: { x: -1, y: 0 } });
-  g.updateJinete(jinete, { x: 1, y: 0 }, 100);
-  assert.equal(jinete.facing, 'W');
-  g.updateJinete(jinete, { x: 0, y: 1 }, 500);
-  assert.equal(jinete.facing, 'S');
+test('updateJinete sports the dash direction and then keeps the horse upright', () => {
+  const westward = mockJinete({ dashDir: { x: -1, y: 0 } });
+  g.updateJinete(westward, { x: 1, y: 0 }, 100);
+  assert.equal(westward.flipX, true, 'gallops west, reflected');
+  assert.deepEqual(westward.velocity, { x: -JINETE_DASH_SPEED, y: 0 });
+
+  const eastward = mockJinete();
+  g.updateJinete(eastward, { x: -1, y: 0 }, 100);
+  assert.equal(eastward.flipX, false, 'gallops east, unreflected');
+
+  const spent = mockJinete();
+  g.updateJinete(spent, { x: 0, y: 1 }, 500);
+  assert.deepEqual(spent.velocity, { x: 0, y: JINETE_SPEED });
+  assert.equal(spent.flipX, null, 'homing south never flips the horse');
 });
+
 
 // --- escena: el Jinete en combate --------------------------------------------
 
 function mockHud() {
   const setText = () => {};
-  return { score: { setText }, lives: { setText }, oleada: { setText } };
+  return {
+    score: { setText },
+    lives: { setText },
+    oleada: { setText },
+    piedraBarBg: { setVisible() {} },
+    piedraFill: { setVisible() {}, setDisplaySize() {} },
+    piedraCaption: { setVisible() {} },
+    piedraReady: { setVisible() {} },
+  };
 }
 
 function mockScene({ espanoles = [], bullets = [] } = {}) {
   return {
     state: {
       phase: 'playing',
-      run: { lives: 3, score: 0, oleada: 3, invulnerableUntil: 0 },
+      run: {
+        lives: 3,
+        score: 0,
+        oleada: 3,
+        invulnerableUntil: 0,
+        piedraBank: 0,
+        piedraProgress: 0,
+        piedraScoreSeen: 0,
+      },
     },
     patriota: { x: 400, y: 300 },
     hud: mockHud(),

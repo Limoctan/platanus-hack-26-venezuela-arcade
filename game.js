@@ -846,8 +846,11 @@ function updateJinete(jinete, direction, time) {
   const vector = dashing ? jinete.dashDir : direction;
   const speed = dashing ? JINETE_DASH_SPEED : JINETE_SPEED;
   jinete.body.setVelocity(vector.x * speed, vector.y * speed);
-  jinete.facing = nextFacing(jinete.facing, vector);
-  jinete.setRotation(facingRotation(jinete.facing));
+  // El caballo siempre se ve erguido: no se rota el sprite, solo se refleja
+  // en horizontal cuando su rumbo apunta hacia el oeste.
+  if (vector.x !== 0) {
+    jinete.setFlipX(vector.x < 0);
+  }
 }
 
 function updateFusilero(scene, fusilero, direction, time) {
