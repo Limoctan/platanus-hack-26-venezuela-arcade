@@ -40,3 +40,9 @@ export function loadGame() {
   vm.runInContext(code, sandbox, { filename: 'game.js' });
   return sandbox;
 }
+
+// Reads a top-level `const`/`let` binding (the like of DEFEAT_LINES) that is
+// scoped lexically and therefore invisible on the sandbox global object.
+export function readGameBinding(sandbox, name) {
+  return vm.runInContext(`(${name})`, sandbox, { filename: 'game.js' });
+}

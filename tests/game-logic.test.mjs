@@ -79,9 +79,12 @@ test('isHighScoreEntry rejects absurd names that would break the board layout', 
   assert.equal(g.isHighScoreEntry({ ...validEntry, name: 'X'.repeat(200) }), false);
 });
 
+test('isHighScoreEntry ignores stale shapes such as punctuated names', () => {
+  assert.equal(g.isHighScoreEntry({ ...validEntry, name: 'ABC. -' }), false);
+});
+
 test('isHighScoreEntry accepts short arcade-style names', () => {
   assert.equal(g.isHighScoreEntry({ ...validEntry, name: 'A' }), true);
-  assert.equal(g.isHighScoreEntry({ ...validEntry, name: 'ABC. -' }), true);
 });
 
 test('isHighScoreEntry rejects absurd scores', () => {

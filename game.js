@@ -4,14 +4,15 @@
 // Jinetes que embisten por los costados a todo galope.
 // Flujo completo (título → partida → pausa → derrota → iniciales → mejores
 // puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
-// 3 vidas e invulnerabilidad breve.
+// 3 vidas e invulnerabilidad breve. Las iniciales solo se piden cuando la
+// puntuación entra en la tabla; la derrota arenga a volver a la carga.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
 const STORAGE_KEY = "batalla-matasiete-highscores";
 const MAX_HIGH_SCORES = 5;
 const WINNING_NAME_LENGTH = 3;
-const MAX_NAME_LENGTH = 8;
+const NAME_PATTERN = new RegExp(`^[A-Z]{1,${WINNING_NAME_LENGTH}}$`);
 const MAX_SCORE = 1e9;
 const PATRIOTA_SPEED = 170;
 const FIRE_INTERVAL = 200;
@@ -109,11 +110,12 @@ const DEFEAT_LINES = [
   "¡Aún queda lucha en la montaña!",
 ];
 
+// Solo A-Z: el tablero pide tres iniciales, sin puntos ni guiones.
 const LETTER_GRID = [
   ["A", "B", "C", "D", "E", "F", "G"],
   ["H", "I", "J", "K", "L", "M", "N"],
   ["O", "P", "Q", "R", "S", "T", "U"],
-  ["V", "W", "X", "Y", "Z", ".", "-"],
+  ["V", "W", "X", "Y", "Z"],
   ["BORRAR", "LISTO"],
 ];
 
@@ -1667,18 +1669,43 @@ function finishRun(scene) {
       scene.state.run.oleada,
     ).padStart(2, "0")}`,
   );
-  scene.endGame.saveStatus.setText(scene.state.saveStatus);
   scene.endGame.container.setVisible(true);
+  // Solo la puntuación que entra en la tabla pide tus iniciales.
+  const qualifies = qualifiesForHighScore(
+    scene.state.run.score,
+    scene.state.highScores,
+  );
+  setNameEntryVisible(scene, qualifies);
 
-  scene.state.nameEntry.letters = [];
-  scene.state.nameEntry.row = 0;
-  scene.state.nameEntry.col = 0;
-  scene.state.nameEntry.moveCooldownUntil = 0;
-  scene.state.nameEntry.confirmCooldownUntil = 0;
-  scene.state.nameEntry.lastMoveVector = { x: 0, y: 0 };
-  refreshNameEntry(scene);
-  updateLetterGridHighlight(scene);
+  const entry = scene.state.nameEntry;
+  entry.letters = [];
+  entry.row = 0;
+  entry.col = 0;
+  entry.moveCooldownUntil = 0;
+  entry.confirmCooldownUntil = 0;
+  entry.lastMoveVector = { x: 0, y: 0 };
+
+  if (qualifies) {
+    scene.state.phase = "gameover";
+    refreshNameEntry(scene);
+    updateLetterGridHighlight(scene);
+  } else {
+    scene.state.phase = "saved";
+    scene.state.saveStatus =
+      "NO ENTRÓ EN LA TABLA. START: OTRA PARTIDA · BOTÓN 1: TÍTULO";
+  }
+  scene.endGame.saveStatus.setText(scene.state.saveStatus);
   playSound(scene, "defeat");
+}
+
+function setNameEntryVisible(scene, visible) {
+  scene.endGame.nameLabel.setVisible(visible);
+  scene.endGame.nameValue.setVisible(visible);
+  scene.endGame.instructions.setVisible(visible);
+  for (const item of scene.endGame.gridLabels) {
+    item.cell.setVisible(visible);
+    item.label.setVisible(visible);
+  }
 }
 
 function returnToStart(scene) {
@@ -2453,9 +2480,12 @@ function submitHighScore(scene) {
     return;
   }
 
-  const initials =
-    scene.state.nameEntry.letters.join("").slice(0, WINNING_NAME_LENGTH) ||
-    "???";
+  // El tablero honesto: sin iniciales no se registra nada, nada de
+  // marcadores fantasma que la validación por carga descartaría.
+  const initials = scene.state.nameEntry.letters.join("");
+  if (!NAME_PATTERN.test(initials)) {
+    return;
+  }
 
   const entry = {
     name: initials,
@@ -2504,10 +2534,37 @@ async function persistHighScore(entry) {
 
 async function loadHighScores() {
   const result = await storageGet(STORAGE_KEY);
-  if (!result.found || !Array.isArray(result.value)) {
+  return parseHighScores(result);
+}
+
+// Dado el resultado crudo del almacenamiento, valida cada forma y devuelve
+// las cinco mejores puntuaciones: formas ajenas o desactualizadas se
+// descartan y el resto se ordena de mayor a menor.
+function parseHighScores(result) {
+  if (!result || !result.found || !Array.isArray(result.value)) {
     return [];
   }
-  return result.value.filter(isHighScoreEntry).slice(0, MAX_HIGH_SCORES);
+  return rankHighScores(result.value.filter(isHighScoreEntry));
+}
+
+// ¿La puntuación merece pedir iniciales? Solo si es positiva y entra en la
+// tabla, completándola (menos de cinco) o superando a la quinta.
+function qualifiesForHighScore(score, highScores) {
+  if (!Number.isFinite(score) || score <= 0) {
+    return false;
+  }
+  if (!Array.isArray(highScores) || highScores.length < MAX_HIGH_SCORES) {
+    return true;
+  }
+  const fifth = highScores[MAX_HIGH_SCORES - 1];
+  if (
+    !fifth ||
+    typeof fifth.score !== "number" ||
+    !Number.isFinite(fifth.score)
+  ) {
+    return true;
+  }
+  return score >= fifth.score;
 }
 
 function isHighScoreEntry(value) {
@@ -2515,8 +2572,7 @@ function isHighScoreEntry(value) {
     value &&
     typeof value === "object" &&
     typeof value.name === "string" &&
-    value.name.length > 0 &&
-    value.name.length <= MAX_NAME_LENGTH &&
+    NAME_PATTERN.test(value.name) &&
     typeof value.score === "number" &&
     isFinite(value.score) &&
     value.score >= 0 &&
