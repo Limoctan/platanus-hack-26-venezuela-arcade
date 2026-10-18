@@ -193,7 +193,15 @@ test('musketTick holds one shot per cooldown while planted', () => {
 
 function mockHud() {
   const setText = () => {};
-  return { score: { setText }, lives: { setText }, oleada: { setText } };
+  return {
+    score: { setText },
+    lives: { setText },
+    oleada: { setText },
+    piedraBarBg: { setVisible() {} },
+    piedraFill: { setVisible() {}, setDisplaySize() {} },
+    piedraCaption: { setVisible() {} },
+    piedraReady: { setVisible() {} },
+  };
 }
 
 function mockBall(x, y) {
@@ -210,6 +218,9 @@ function mockScene({ espanoles = [], balls = [], ...rest } = {}) {
         invulnerableUntil: 0,
         knockUntil: 0,
         knock: { x: 0, y: 0 },
+        piedraBank: 0,
+        piedraProgress: 0,
+        piedraScoreSeen: 0,
       },
     },
     patriota: { x: 400, y: 300 },

@@ -39,6 +39,12 @@ const JINETE_FROM_OLEADA = 3;
 const JINETE_DASH_SPEED = 320;
 const JINETE_DASH_MS = 450;
 const JINETE_EDGES = [1, 3];
+const PIEDRA_STEP = 1500;
+const PIEDRA_SPEED = 300;
+const PIEDRA_HIT_RANGE = 30;
+const PIEDRA_MARGIN = 24;
+const PIEDRA_BAR = 150;
+const PIEDRA_SPIN = 0.18;
 const OLEADA_BASE_COUNT = 3;
 const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
@@ -77,6 +83,7 @@ const COLORS = {
   cactusDark: 0x2c4d20,
   stone: 0x8a8578,
   stoneDark: 0x5c584e,
+  stoneLight: 0xb5afa0,
   mountain: 0x7a6a4a,
   mountainDark: 0x584b34,
   frame: 0x3a3020,
@@ -198,6 +205,7 @@ function create() {
   createPatriota(scene);
   createBullets(scene);
   createSable(scene);
+  createPiedra(scene);
   createEspanoles(scene);
   createMusketBalls(scene);
   createHud(scene);
@@ -260,6 +268,7 @@ function update(time) {
     updateMusketBalls(scene);
     resolveBulletHits(scene);
     resolveMusketHits(scene, time);
+    updatePiedras(scene);
     checkContactDamage(scene, time);
     if (scene.state.phase !== "playing") {
       return;
@@ -554,21 +563,21 @@ function fireBullet(scene) {
   );
 }
 
-function cullOutOfBounds(group) {
+function cullOutOfBounds(group, isOutOfBounds) {
   const children = group.getChildren();
   for (let i = children.length - 1; i >= 0; i -= 1) {
-    if (bulletOutOfBounds(children[i].x, children[i].y)) {
+    if (isOutOfBounds(children[i].x, children[i].y)) {
       children[i].destroy();
     }
   }
 }
 
 function updateBullets(scene) {
-  cullOutOfBounds(scene.bullets);
+  cullOutOfBounds(scene.bullets, bulletOutOfBounds);
 }
 
 function updateMusketBalls(scene) {
-  cullOutOfBounds(scene.musketBalls);
+  cullOutOfBounds(scene.musketBalls, bulletOutOfBounds);
 }
 
 function clearGroup(group) {
@@ -584,6 +593,106 @@ function clearBullets(scene) {
 
 function clearMusketBalls(scene) {
   clearGroup(scene.musketBalls);
+}
+
+// --- la Piedra ----------------------------------------------------------------
+
+// El gran golpe: una Piedra del tamaño de un cabo de tropa que atraviesa una
+// fila entera de españoles y aplasta cualquier balón de fusil en su camino.
+function createPiedra(scene) {
+  const g = scene.add.graphics();
+  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillCircle(14, 15, 13);
+  g.fillStyle(COLORS.stone, 1);
+  g.fillCircle(14, 13, 12);
+  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillCircle(11, 10, 4);
+  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillCircle(9, 17, 3.5);
+  g.fillCircle(19, 10, 3);
+  g.fillCircle(20, 17, 2.5);
+  g.generateTexture("piedra", 28, 28);
+  g.destroy();
+
+  scene.piedras = scene.physics.add.group();
+}
+
+function maybeThrowPiedra(scene) {
+  const run = scene.state.run;
+  if (!piedraCanThrow(run.piedraBank, scene.piedras.getLength())) {
+    return;
+  }
+  run.piedraBank = 0;
+  const direction = facingVector(run.facing);
+  const piedra = scene.piedras.create(
+    scene.patriota.x + direction.x * 26,
+    scene.patriota.y + direction.y * 26,
+    "piedra",
+  );
+  if (!piedra) {
+    return;
+  }
+  piedra.setDepth(6);
+  piedra.body.setAllowGravity(false);
+  piedra.body.setVelocity(
+    direction.x * PIEDRA_SPEED,
+    direction.y * PIEDRA_SPEED,
+  );
+  refreshHud(scene);
+  playSound(scene, "piedraThrow");
+  scene.cameras.main.shake(130, 0.005);
+}
+
+function isThrowingPiedra(controls) {
+  return Boolean(controls.held.P1_3 || controls.held.P2_3);
+}
+
+function updatePiedras(scene) {
+  cullOutOfBounds(scene.piedras, piedraOutOfBounds);
+  for (const piedra of scene.piedras.getChildren()) {
+    piedra.rotation += PIEDRA_SPIN;
+  }
+  resolvePiedraHits(scene);
+}
+
+function resolvePiedraHits(scene) {
+  const piedras = scene.piedras.getChildren();
+  for (let i = piedras.length - 1; i >= 0; i -= 1) {
+    const piedra = piedras[i];
+    let crushed = 0;
+    for (const espanol of scene.espanoles.getChildren().slice()) {
+      if (
+        !withinRange(piedra.x, piedra.y, espanol.x, espanol.y, PIEDRA_HIT_RANGE)
+      ) {
+        continue;
+      }
+      espanol.destroy();
+      scene.state.run.score += pointsForKill(espanol.kind);
+      crushed += 1;
+    }
+    for (const ball of scene.musketBalls.getChildren().slice()) {
+      if (withinRange(piedra.x, piedra.y, ball.x, ball.y, PIEDRA_HIT_RANGE)) {
+        ball.destroy();
+      }
+    }
+    if (crushed > 0) {
+      refreshHud(scene);
+      playSound(scene, "crush");
+    }
+  }
+}
+
+function clearPiedras(scene) {
+  clearGroup(scene.piedras);
+}
+
+function piedraOutOfBounds(x, y) {
+  return (
+    x < -PIEDRA_MARGIN ||
+    x > GAME_WIDTH + PIEDRA_MARGIN ||
+    y < -PIEDRA_MARGIN ||
+    y > GAME_HEIGHT + PIEDRA_MARGIN
+  );
 }
 
 // --- españoles en escena ------------------------------------------------------
@@ -1000,6 +1109,10 @@ function updatePatriota(scene, time) {
     resolveSableHits(scene, run.facing);
     playSound(scene, "sable");
   }
+
+  if (isThrowingPiedra(scene.controls)) {
+    maybeThrowPiedra(scene);
+  }
 }
 
 function getMoveVector(controls) {
@@ -1062,6 +1175,29 @@ function swingTick(held, now, nextSwingAt) {
     return { swing: false, nextSwingAt };
   }
   return { swing: true, nextSwingAt: now + SABLE_COOLDOWN };
+}
+
+// --- la Piedra (lógica pura) --------------------------------------------------
+
+// El medidor se llena con puntos: una Piedra lista por cada 1500. El banco
+// guarda máximo una, y la puntuación que sobra mientras la Piedra espera se
+// pierde; el lanzamiento solo vacía el banco, no el medidor, que sigue
+// llenándose.
+function piedraGaugeTick(bank, progress, scoreDelta) {
+  if (bank > 0) {
+    return { bank: 1, progress: 0, granted: false };
+  }
+  const filled = progress + Math.max(0, scoreDelta);
+  const gained = Math.floor(filled / PIEDRA_STEP);
+  if (gained === 0) {
+    return { bank: 0, progress: filled, granted: false };
+  }
+  return { bank: 1, progress: gained > 1 ? 0 : filled - PIEDRA_STEP, granted: true };
+}
+
+// Solo se lanza con una Piedra guardada y sin otra Piedra en vuelo.
+function piedraCanThrow(bank, inFlight) {
+  return bank > 0 && inFlight <= 0;
 }
 
 function inSableArc(px, py, facing, ex, ey) {
@@ -1336,9 +1472,72 @@ function createHud(scene) {
     })
     .setOrigin(0.5)
     .setDepth(10);
+
+  // Medidor de la Piedra: una Piedra lista cada 1500 puntos y, lista, anuncia
+  // ¡PIEDRA LISTA! parpadeando en su lugar.
+  scene.hud.piedraBarBg = scene.add
+    .rectangle(28 + PIEDRA_BAR / 2, 58, PIEDRA_BAR + 6, 10, COLORS.cell, 0.9)
+    .setStrokeStyle(1, COLORS.frame, 0.9)
+    .setDepth(10);
+  scene.hud.piedraFill = scene.add
+    .rectangle(28, 58, PIEDRA_BAR, 6, COLORS.accent)
+    .setOrigin(0, 0.5)
+    .setDepth(10);
+  scene.hud.piedraCaption = scene.add
+    .text(28 + PIEDRA_BAR + 12, 58, "PIEDRA", {
+      fontFamily: "monospace",
+      fontSize: "10px",
+      color: "#b39a5f",
+    })
+    .setOrigin(0, 0.5)
+    .setDepth(10);
+  scene.hud.piedraReady = scene.add
+    .text(28, 58, "¡PIEDRA LISTA!", {
+      fontFamily: "monospace",
+      fontSize: "17px",
+      color: "#f2c14e",
+      fontStyle: "bold",
+      stroke: "#584b34",
+      strokeThickness: 3,
+    })
+    .setOrigin(0, 0.5)
+    .setDepth(10)
+    .setVisible(false);
+  scene.tweens.add({
+    targets: scene.hud.piedraReady,
+    alpha: 0.15,
+    duration: 220,
+    yoyo: true,
+    repeat: -1,
+  });
+}
+
+function tickPiedraGauge(scene) {
+  const run = scene.state.run;
+  const delta = run.score - run.piedraScoreSeen;
+  run.piedraScoreSeen = run.score;
+  const tick = piedraGaugeTick(run.piedraBank, run.piedraProgress, delta);
+  run.piedraBank = tick.bank;
+  run.piedraProgress = tick.progress;
+  return tick;
+}
+
+function updatePiedraHud(scene, tick) {
+  const ready = scene.state.run.piedraBank > 0;
+  const fill = Math.max(0, Math.min(1, tick.progress / PIEDRA_STEP));
+  scene.hud.piedraBarBg.setVisible(!ready);
+  scene.hud.piedraCaption.setVisible(!ready);
+  scene.hud.piedraFill.setVisible(!ready);
+  scene.hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 1), 6);
+  scene.hud.piedraReady.setVisible(ready);
+  if (tick.granted) {
+    playSound(scene, "listo");
+  }
 }
 
 function refreshHud(scene) {
+  // El medidor de la Piedra avanza aquí: todo punto que sume a la puntuación
+  // termina pasando por refreshHud, y así el medidor nunca queda atrás.
   scene.hud.score.setText(
     `PUNTOS ${String(scene.state.run.score).padStart(4, "0")}`,
   );
@@ -1346,6 +1545,7 @@ function refreshHud(scene) {
   scene.hud.oleada.setText(
     `OLEADA ${String(scene.state.run.oleada).padStart(2, "0")}`,
   );
+  updatePiedraHud(scene, tickPiedraGauge(scene));
 }
 
 function showOleadaSplash(scene, oleada) {
@@ -1387,6 +1587,9 @@ function freshRun() {
     invulnerableUntil: 0,
     knock: { x: 0, y: 0 },
     knockUntil: 0,
+    piedraBank: 0,
+    piedraProgress: 0,
+    piedraScoreSeen: 0,
     oleadaTotal: 0,
     oleadaSpawned: 0,
     oleadaInterval: 0,
@@ -1406,6 +1609,7 @@ function startRun(scene) {
   scene.state.run = freshRun();
   clearBullets(scene);
   clearMusketBalls(scene);
+  clearPiedras(scene);
   clearEspanoles(scene);
   scene.tweens.killTweensOf(scene.sableArc);
   scene.sableArc.setVisible(false);
@@ -1415,7 +1619,7 @@ function startRun(scene) {
 
   refreshHud(scene);
   scene.hud.status.setText(
-    "BOTÓN 1: DISPARAR   BOTÓN 2: SABLE   START: PAUSA",
+    "BOTÓN 1: DISPARAR   BOTÓN 2: SABLE   BOTÓN 3: PIEDRA   START: PAUSA",
   );
   scene.state.phase = "playing";
   scene.physics.resume();
@@ -1450,6 +1654,7 @@ function finishRun(scene) {
   scene.patriota.setVisible(true);
   clearBullets(scene);
   clearMusketBalls(scene);
+  clearPiedras(scene);
   clearEspanoles(scene);
   scene.physics.pause();
   clearPressedControls(scene);
@@ -1841,6 +2046,7 @@ function createControlsScreen(scene) {
     "JOYSTICK ....... MOVER · MIRAR",
     "BOTÓN 1 ........ DISPARAR (SOSTENER)",
     "BOTÓN 2 ........ SABLE (GOLPE CERCANO)",
+    "BOTÓN 3 ........ PIEDRA (AL LLENAR EL MEDIDOR)",
     "",
     "EN PAUSA",
     "JOYSTICK ....... ELEGIR OPCIÓN",
@@ -2567,6 +2773,31 @@ function playSound(scene, type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
       osc.start(now);
       osc.stop(now + 0.24);
+    } else if (type === "piedraThrow") {
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.linearRampToValueAtTime(70, now + 0.28);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === "crush") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.14);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      osc.start(now);
+      osc.stop(now + 0.16);
+    } else if (type === "listo") {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(660, now);
+      osc.frequency.setValueAtTime(880, now + 0.1);
+      osc.frequency.setValueAtTime(1100, now + 0.2);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+      osc.start(now);
+      osc.stop(now + 0.34);
     } else if (type === "defeat") {
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(330, now);
