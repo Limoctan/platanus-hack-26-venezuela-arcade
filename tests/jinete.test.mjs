@@ -174,6 +174,20 @@ test('jineteTick ends the dash once the window elapses', () => {
   assert.equal(g.jineteTick({ dashUntil: 500 }, 900).dashing, false);
 });
 
+// --- jineteTick (el caballo se empina tras tocar al Patriota) -----------------
+
+test('jineteTick stops the horse even mid-dash while it rears', () => {
+  const midStun = g.jineteTick({ dashUntil: 500, stunnedUntil: 300 }, 100);
+  assert.equal(midStun.stunned, true);
+  assert.equal(midStun.dashing, false, 'the rear interrupts the dash');
+});
+
+test('jineteTick resumes the hunt once the horse comes down', () => {
+  const calmed = g.jineteTick({ dashUntil: 900, stunnedUntil: 300 }, 400);
+  assert.equal(calmed.stunned, false);
+  assert.equal(calmed.dashing, true);
+});
+
 // --- updateJinete (embestida lateral y persecución a alta velocidad) ---------
 
 const JINETE_DASH_SPEED = 320;
@@ -234,18 +248,33 @@ test('updateJinete sports the dash direction and then keeps the horse upright', 
   assert.equal(spent.flipX, null, 'homing south never flips the horse');
 });
 
+test('updateJinete freezes the horse in place while it rears', () => {
+  const jinete = mockJinete({ stunnedUntil: 300, dashUntil: 500 });
+  g.updateJinete(jinete, { x: 0, y: -1 }, 100);
+  assert.deepEqual(jinete.velocity, { x: 0, y: 0 }, 'the rear leaves no ground');
+});
+
 
 // --- escena: el Jinete en combate --------------------------------------------
 
 function mockHud() {
   const setText = () => {};
+  // Un corazón que recuerda qué textura lleva: refreshHud solo repinta el
+  // que cambia, así el muñeco sigue el rastro real como en pantalla.
+  const heart = () => ({
+    texture: { key: 'corazonLleno' },
+    setTexture(key) {
+      this.texture.key = key;
+    },
+  });
   return {
     score: { setText },
-    lives: { setText },
     oleada: { setText },
+    hearts: [heart(), heart(), heart()],
+    livesShown: 3,
     piedraBarBg: { setVisible() {} },
     piedraFill: { setVisible() {}, setDisplaySize() {} },
-    piedraCaption: { setVisible() {} },
+    piedraIcon: {},
     piedraReady: { setVisible() {} },
   };
 }
@@ -268,6 +297,7 @@ function mockScene({ espanoles = [], bullets = [] } = {}) {
     hud: mockHud(),
     time: { delayedCall() {} },
     sound: {},
+    tweens: { add() {}, killTweensOf() {} },
     bullets: { getChildren: () => bullets },
     musketBalls: { getChildren: () => [] },
     espanoles: { getChildren: () => espanoles },
@@ -313,6 +343,32 @@ test('checkContactDamage costs a life when a Jinete runs into the Patriota', () 
   const scene = mockScene({ espanoles: [jinete] });
   g.checkContactDamage(scene, 1000);
   assert.equal(scene.state.run.lives, 2);
+});
+
+test('a mid-dash Jinete that lands a hit gallops past instead of gluing', () => {
+  const jinete = { x: 412, y: 300, kind: 'jinete', dashUntil: 1200 };
+  const scene = mockScene({ espanoles: [jinete] });
+  g.checkContactDamage(scene, 1000);
+  assert.equal(scene.state.run.lives, 2);
+  assert.equal(jinete.dashUntil, 1450, 'the charge carries on for another dash');
+  assert.equal(jinete.stunnedUntil, undefined, 'no rear while it gallops through');
+});
+
+test('a chasing Jinete rears after contact so the Patriota can escape', () => {
+  const jinete = { x: 412, y: 300, kind: 'jinete' };
+  const scene = mockScene({ espanoles: [jinete] });
+  g.checkContactDamage(scene, 1000);
+  assert.equal(scene.state.run.lives, 2);
+  assert.equal(jinete.stunnedUntil, 1700, 'the horse rears for 700 ms');
+});
+
+test('a gluing Jinete never chips while the invulnerability window lasts', () => {
+  const jinete = { x: 412, y: 300, kind: 'jinete' };
+  const scene = mockScene({ espanoles: [jinete] });
+  g.checkContactDamage(scene, 1000); // contact: hurt, the horse rears
+  g.checkContactDamage(scene, 1699); // rear over, still overlapping, shielded
+  g.checkContactDamage(scene, 2900); // shield still standing
+  assert.equal(scene.state.run.lives, 2, 'no second bite inside the window');
 });
 
 // --- summary ------------------------------------------------------------------

@@ -9,6 +9,9 @@
 // Chiptune procedural con Web Audio: fanfarria y tema en el título, marcha en
 // bucle durante el combate (batería incluida) y un golpe de derrota con la
 // pista detenida. Sin archivos: todo se programa nota por nota en tiempo real.
+// Presentación: sprites más grandes y detallados (patriota ×1.5, piedra ×2),
+// tipografía arcade de píxel dibujada píxel a píxel en tiempo de carga y HUD
+// de cuero: panel oscuro, corazones por vida e icono de Piedra en el medidor.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
@@ -35,20 +38,25 @@ const FUSILERO_FROM_OLEADA = 2;
 const FUSILERO_AIM_MS = 550;
 const FUSILERO_COOLDOWN_MS = 1800;
 const MUSKET_SPEED = 190;
-const MUSKET_HIT_RANGE = 16;
+const MUSKET_HIT_RANGE = 20;
 const JINETE_SPEED = 150;
 const JINETE_HP = 1;
 const JINETE_SCORE = 150;
 const JINETE_FROM_OLEADA = 3;
 const JINETE_DASH_SPEED = 320;
 const JINETE_DASH_MS = 450;
+// Tras tocar al Patriota el caballo no se queda encima: la embestida pasa de
+// largo o el caballo se empina un instante, dando aire durante la invulnerabilidad.
+const JINETE_STUN_MS = 700;
 const JINETE_EDGES = [1, 3];
 const PIEDRA_STEP = 1500;
 const PIEDRA_SPEED = 300;
-const PIEDRA_HIT_RANGE = 30;
+const PIEDRA_HIT_RANGE = 44;
 const PIEDRA_MARGIN = 24;
 const PIEDRA_BAR = 150;
 const PIEDRA_SPIN = 0.18;
+const PIEDRA_ICON_SCALE = 0.42;
+const PIEDRA_ICON_POP = 0.58;
 const OLEADA_BASE_COUNT = 3;
 const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
@@ -58,8 +66,8 @@ const OLEADA_ENEMY_STEP = 0.05;
 const OLEADA_ENEMY_CAP = 1.3;
 const OLEADA_LULL_MS = 1500;
 const OLEADA_BONUS = 50;
-const CONTACT_RANGE = 16;
-const HIT_RANGE = 16;
+const CONTACT_RANGE = 22;
+const HIT_RANGE = 22;
 const LIVES_TOTAL = 3;
 const INVULN_MS = 2000;
 const BLINK_MS = 120;
@@ -107,6 +115,9 @@ const COLORS = {
   trim: 0xe8e4d8,
   horse: 0x6b4a2f,
   horseDark: 0x432e1c,
+  heart: 0xe74c3c,
+  leather: 0x241c12,
+  dim: 0x8a7a50,
 };
 
 const DEFEAT_LINES = [
@@ -213,6 +224,8 @@ function create() {
     musicOut: null,
   };
 
+  makeFont(scene);
+  createHearts(scene);
   createStage(scene);
   createPatriota(scene);
   createBullets(scene);
@@ -420,55 +433,79 @@ function safeSpot(rng) {
 }
 
 function drawStone(g, x, y, rng) {
-  const size = rng.integerInRange(10, 22);
+  const size = rng.integerInRange(14, 32);
   g.fillStyle(COLORS.stoneDark, 1);
-  g.fillEllipse(x, y + 2, size, size * 0.62);
+  g.fillEllipse(x, y + 3, size, size * 0.62);
   g.fillStyle(COLORS.stone, 1);
   g.fillEllipse(x - 1, y - 1, size * 0.86, size * 0.52);
+  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillEllipse(x - size * 0.2, y - size * 0.22, size * 0.3, size * 0.18);
 }
 
 function drawCactus(g, x, y, rng) {
-  const h = rng.integerInRange(20, 32);
+  const h = rng.integerInRange(30, 46);
   g.fillStyle(COLORS.cactusDark, 1);
-  g.fillRoundedRect(x - 4, y - h / 2, 8, h, 4);
+  g.fillRoundedRect(x - 6, y - h / 2, 12, h, 6);
   g.fillStyle(COLORS.cactus, 1);
-  g.fillRoundedRect(x - 3, y - h / 2 - 1, 5, h - 2, 3);
+  g.fillRoundedRect(x - 4, y - h / 2 - 1, 7, h - 2, 4);
   const armY = y - h / 4;
   g.fillStyle(COLORS.cactus, 1);
-  g.fillRoundedRect(x + 3, armY, 8, 5, 2.5);
-  g.fillRoundedRect(x + 8, armY - 6, 5, 10, 2.5);
+  g.fillRoundedRect(x + 4, armY, 12, 7, 3.5);
+  g.fillRoundedRect(x + 12, armY - 9, 7, 15, 3.5);
 }
 
 function createPatriota(scene) {
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.patriota, 1);
-  g.fillRoundedRect(5, 6, 13, 12, 4);
-  g.fillStyle(COLORS.sash, 1);
-  g.fillRect(6, 11, 11, 3);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillRoundedRect(8, 4, 5, 4, 1.5);
-  g.fillRoundedRect(8, 16, 5, 4, 1.5);
+  // Mochila a la espalda.
+  g.fillStyle(COLORS.horseDark, 1);
+  g.fillRoundedRect(4, 14, 7, 10, 2.5);
 
-  g.fillStyle(COLORS.hat, 1);
-  g.fillCircle(11, 12, 5);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(13, 12, 5, 6);
-
+  // Casaca blanca con contorno, faja roja y cuello dorado; botas abajo.
   g.fillStyle(COLORS.frame, 1);
-  g.fillRect(15, 11, 8, 2);
-  g.fillStyle(0xcfc7b2, 1);
-  g.fillCircle(22, 12, 1.5);
+  g.fillRoundedRect(7, 11, 19, 20, 6);
+  g.fillStyle(COLORS.patriota, 1);
+  g.fillRoundedRect(8.5, 12.5, 16, 17, 5);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(19, 30, 6, 5);
+  g.fillRect(11, 30, 6, 5);
+  g.fillStyle(COLORS.sash, 1);
+  g.fillRect(8.5, 20, 16, 4);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(14, 13.5, 5, 2);
 
-  g.generateTexture("patriota", 24, 24);
+  // Rostro con ojo, sombrero bicornio con escarapela roja.
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(24, 15, 7, 9);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(26, 13.5, 2, 2);
+  g.fillStyle(COLORS.hat, 1);
+  g.fillTriangle(15, 12, 33, 12, 25, 3);
+  g.fillStyle(COLORS.sash, 1);
+  g.fillRect(22, 9, 6, 2);
+
+  // Brazo alzado con el fusil y bayoneta listada.
+  g.fillStyle(COLORS.patriota, 1);
+  g.fillRoundedRect(17, 16, 6, 6, 2);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillCircle(24, 18, 2.2);
+  g.lineStyle(3, COLORS.frame, 1);
+  g.beginPath();
+  g.moveTo(23, 17);
+  g.lineTo(34, 10);
+  g.strokePath();
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(33, 7.5, 35.5, 9.5, 33.5, 11);
+
+  g.generateTexture("patriota", 36, 36);
   g.destroy();
 
   const patriota = scene.add
     .sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, "patriota")
     .setDepth(5);
   scene.physics.add.existing(patriota);
-  patriota.body.setSize(14, 14);
-  patriota.body.setOffset(5, 5);
+  patriota.body.setSize(20, 20);
+  patriota.body.setOffset(8, 8);
   patriota.body.setAllowGravity(false);
   patriota.body.setCollideWorldBounds(true);
   patriota.body.setBounce(0, 0);
@@ -479,12 +516,12 @@ function createPatriota(scene) {
 function createBullets(scene) {
   const g = scene.add.graphics();
   g.fillStyle(COLORS.frame, 1);
-  g.fillEllipse(8, 6, 16, 8);
+  g.fillEllipse(12, 8, 24, 12);
   g.fillStyle(COLORS.accent, 1);
-  g.fillEllipse(8, 6, 13, 5);
+  g.fillEllipse(12, 8, 19, 8);
   g.fillStyle(0xfdf6e3, 1);
-  g.fillEllipse(10, 5.5, 6, 2.6);
-  g.generateTexture("bala", 16, 12);
+  g.fillEllipse(15, 7.5, 8, 4);
+  g.generateTexture("bala", 24, 16);
   g.destroy();
 
   scene.bullets = scene.physics.add.group();
@@ -559,8 +596,8 @@ function fireBullet(scene) {
   const facing = scene.state.run.facing;
   const direction = facingVector(facing);
   const bullet = scene.bullets.create(
-    scene.patriota.x + direction.x * 20,
-    scene.patriota.y + direction.y * 20,
+    scene.patriota.x + direction.x * 28,
+    scene.patriota.y + direction.y * 28,
     "bala",
   );
   if (!bullet) {
@@ -613,17 +650,34 @@ function clearMusketBalls(scene) {
 // fila entera de españoles y aplasta cualquier balón de fusil en su camino.
 function createPiedra(scene) {
   const g = scene.add.graphics();
+
   g.fillStyle(COLORS.stoneDark, 1);
-  g.fillCircle(14, 15, 13);
+  g.fillCircle(28, 29, 26);
   g.fillStyle(COLORS.stone, 1);
-  g.fillCircle(14, 13, 12);
+  g.fillCircle(28, 26, 24);
   g.fillStyle(COLORS.stoneLight, 1);
-  g.fillCircle(11, 10, 4);
+  g.fillCircle(19, 16, 8);
+  g.fillCircle(15, 12, 3);
   g.fillStyle(COLORS.stoneDark, 1);
-  g.fillCircle(9, 17, 3.5);
-  g.fillCircle(19, 10, 3);
-  g.fillCircle(20, 17, 2.5);
-  g.generateTexture("piedra", 28, 28);
+  g.fillCircle(11, 36, 5.5);
+  g.fillCircle(38, 41, 6.5);
+  g.fillCircle(30, 45, 4.5);
+  g.fillCircle(44, 17, 5);
+  g.fillCircle(37, 27, 3.5);
+  g.lineStyle(2, COLORS.stoneDark, 1);
+  g.beginPath();
+  g.moveTo(28, 6);
+  g.lineTo(24, 20);
+  g.lineTo(30, 30);
+  g.lineTo(25, 41);
+  g.strokePath();
+  g.beginPath();
+  g.moveTo(46, 24);
+  g.lineTo(37, 30);
+  g.lineTo(42, 42);
+  g.strokePath();
+
+  g.generateTexture("piedra", 56, 56);
   g.destroy();
 
   scene.piedras = scene.physics.add.group();
@@ -637,8 +691,8 @@ function maybeThrowPiedra(scene) {
   run.piedraBank = 0;
   const direction = facingVector(run.facing);
   const piedra = scene.piedras.create(
-    scene.patriota.x + direction.x * 26,
-    scene.patriota.y + direction.y * 26,
+    scene.patriota.x + direction.x * 36,
+    scene.patriota.y + direction.y * 36,
     "piedra",
   );
   if (!piedra) {
@@ -719,56 +773,76 @@ function createEspanoles(scene) {
 function drawLanceroTexture(scene) {
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.royalist, 1);
-  g.fillRoundedRect(5, 6, 13, 12, 4);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillRect(6, 11, 11, 2);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillRoundedRect(8, 16, 5, 4, 1.5);
-
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRoundedRect(7, 2, 8, 7, 2);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(7, 8, 8, 1);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(13, 12, 5, 6);
-
+  // Casaca azul real con contorno, banda cruzada blanca y botas.
   g.fillStyle(COLORS.frame, 1);
-  g.fillRect(16, 11, 9, 2);
+  g.fillRoundedRect(7, 10, 23, 21, 6);
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(8.5, 11.5, 20, 18, 5);
   g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(25, 10, 25, 13, 30, 11.5);
+  g.fillRect(9, 20, 19, 3);
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRect(10, 30, 6, 4);
+  g.fillRect(18, 30, 6, 4);
 
-  g.generateTexture("lancero", 30, 24);
+  // Casco con penacho dorado y rostro con mirada al frente.
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRoundedRect(11, 3, 13, 10, 4);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(11, 7, 13, 2);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(10, 11, 17, 11, 10, 5);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(21, 17, 7, 8);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(23, 15, 2, 2);
+
+  // Lanza larga con banderín al viento.
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(29, 15, 13, 3);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(41, 13, 45, 16.5, 41, 20);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillTriangle(31, 9, 31, 16, 39, 12.5);
+
+  g.generateTexture("lancero", 46, 34);
   g.destroy();
 }
 
 function drawFusileroTexture(scene) {
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.royalist, 1);
-  g.fillRoundedRect(5, 6, 13, 12, 4);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillRect(6, 11, 11, 2);
+  // Casaca azul con contorno, morral a la espalda y cinturón cruzado.
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRoundedRect(9, 11, 24, 21, 6);
   g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRoundedRect(2, 7, 4, 8, 2);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillRoundedRect(8, 16, 5, 4, 1.5);
-
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRoundedRect(7, 1, 8, 8, 2);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(7, 4, 8, 2);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(13, 12, 5, 6);
-
-  g.fillStyle(COLORS.hat, 1);
-  g.fillRect(15, 11, 4, 3);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(18, 11.5, 12, 2);
+  g.fillRoundedRect(4, 14, 8, 11, 3);
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(10.5, 12.5, 21, 18, 5);
   g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(29, 10.5, 29, 13.5, 33, 12);
+  g.fillRect(11, 21, 20, 3);
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRect(12, 31, 6, 3);
+  g.fillRect(20, 31, 6, 3);
 
-  g.generateTexture("fusilero", 34, 24);
+  // Tricornio con vueltas doradas y rostro.
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRoundedRect(11, 2, 16, 11, 4);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(13, 7, 12, 3);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillEllipse(23, 18, 7, 8);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(25, 16, 2, 2);
+
+  // Fusil plantado con bayoneta calada.
+  g.fillStyle(COLORS.hat, 1);
+  g.fillRect(30, 18, 5, 4);
+  g.fillStyle(COLORS.frame, 1);
+  g.fillRect(34, 19, 11, 3);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillTriangle(45, 16.5, 49, 20.5, 45, 23);
+
+  g.generateTexture("fusilero", 50, 34);
   g.destroy();
 }
 
@@ -777,56 +851,62 @@ function drawFusileroTexture(scene) {
 function drawJineteTexture(scene) {
   const g = scene.add.graphics();
 
+  // Cola y patas del caballo.
   g.fillStyle(COLORS.horseDark, 1);
-  g.fillRect(11, 24, 3, 6);
-  g.fillRect(16, 24, 3, 6);
-  g.fillRect(25, 24, 3, 6);
-  g.fillRect(30, 24, 3, 6);
-  g.fillTriangle(10, 16, 2, 13, 3, 22);
+  g.fillTriangle(15, 25, 2, 21, 4, 35);
+  g.fillRect(16, 36, 5, 8);
+  g.fillRect(24, 36, 5, 8);
+  g.fillRect(37, 36, 5, 8);
+  g.fillRect(45, 36, 5, 8);
 
+  // Cuerpo, cuello y cabeza del caballo, con oreja y ojo.
   g.fillStyle(COLORS.horse, 1);
-  g.fillRoundedRect(8, 15, 27, 10, 5);
-  g.fillRoundedRect(31, 9, 7, 9, 3);
-  g.fillRoundedRect(35, 8, 8, 6, 2.5);
-  g.fillTriangle(32, 9, 34, 4, 37, 9);
-
+  g.fillRoundedRect(11, 22, 41, 16, 8);
+  g.fillRoundedRect(46, 12, 11, 14, 5);
+  g.fillRoundedRect(51, 10, 12, 9, 4);
+  g.fillStyle(COLORS.horseDark, 1);
+  g.fillTriangle(53, 12, 55, 5, 58, 12);
   g.fillStyle(COLORS.frame, 1);
-  g.fillRect(41, 9, 3, 2);
+  g.fillRect(58, 13, 2, 2);
 
+  // Montura con faja roja.
   g.fillStyle(COLORS.sash, 1);
-  g.fillRect(18, 13, 9, 4);
+  g.fillRect(27, 30, 14, 5);
 
+  // Jinete: casaca azul, casco con penacho dorado y rostro.
+  g.fillStyle(COLORS.royalist, 1);
+  g.fillRoundedRect(28, 7, 13, 14, 3);
+  g.fillStyle(COLORS.trim, 1);
+  g.fillRect(29, 14, 11, 2);
+  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillRoundedRect(27, 2, 13, 7, 3);
+  g.fillStyle(COLORS.accent, 1);
+  g.fillRect(27, 5, 13, 2);
+  g.fillStyle(COLORS.skin, 1);
+  g.fillCircle(40, 9, 2.5);
+
+  // Lanza de embestida con punta blanca.
   g.lineStyle(2, COLORS.frame, 1);
   g.beginPath();
-  g.moveTo(16, 13);
-  g.lineTo(41, 4);
+  g.moveTo(31, 18);
+  g.lineTo(58, 6);
   g.strokePath();
   g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(41, 2.5, 41, 6, 43, 4.25);
+  g.fillTriangle(57, 3, 57, 9, 61, 6);
 
-  g.fillStyle(COLORS.royalist, 1);
-  g.fillRoundedRect(19, 5, 8, 9, 2);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillRect(20, 8, 6, 2);
-
-  g.fillStyle(COLORS.skin, 1);
-  g.fillCircle(23, 4, 3);
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRoundedRect(19, 0, 8, 4, 2);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(19, 3, 8, 1);
-
-  g.generateTexture("jinete", 44, 30);
+  g.generateTexture("jinete", 64, 44);
   g.destroy();
 }
 
 function createMusketBalls(scene) {
   const g = scene.add.graphics();
   g.fillStyle(COLORS.stoneDark, 1);
-  g.fillCircle(6, 6, 4);
+  g.fillCircle(9, 9, 7);
   g.fillStyle(COLORS.stone, 1);
-  g.fillCircle(5, 5, 2);
-  g.generateTexture("balaFusil", 12, 12);
+  g.fillCircle(7.5, 7.5, 4.5);
+  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillCircle(6, 6, 2);
+  g.generateTexture("balaFusil", 18, 18);
   g.destroy();
 
   scene.musketBalls = scene.physics.add.group();
@@ -845,11 +925,11 @@ function spawnEspanol(scene, kind, spawnIndex, time) {
     towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
   );
   if (kind === "jinete") {
-    espanol.body.setSize(22, 16);
-    espanol.body.setOffset(11, 7);
+    espanol.body.setSize(34, 24);
+    espanol.body.setOffset(15, 10);
   } else {
-    espanol.body.setSize(18, 16);
-    espanol.body.setOffset(5, 4);
+    espanol.body.setSize(26, 22);
+    espanol.body.setOffset(10, 6);
   }
   espanol.body.setAllowGravity(false);
   espanol.body.setCollideWorldBounds(false);
@@ -860,6 +940,7 @@ function spawnEspanol(scene, kind, spawnIndex, time) {
   if (kind === "jinete") {
     espanol.dashDir = { x: point.x < GAME_WIDTH / 2 ? 1 : -1, y: 0 };
     espanol.dashUntil = time + JINETE_DASH_MS;
+    espanol.stunnedUntil = 0;
   }
 }
 
@@ -965,9 +1046,15 @@ function updateEspanoles(scene, time) {
 // persigue al Patriota a galope tendido.
 function updateJinete(jinete, direction, time, speedScale) {
   const enemyScale = speedScale || 1;
-  const dashing = jineteTick(jinete, time).dashing;
-  const vector = dashing ? jinete.dashDir : direction;
-  const speed = (dashing ? JINETE_DASH_SPEED : JINETE_SPEED) * enemyScale;
+  const tick = jineteTick(jinete, time);
+  // Se empina: se detiene en seco, sin perseguir al Patriota que huye.
+  if (tick.stunned) {
+    jinete.body.setVelocity(0, 0);
+    return;
+  }
+  const vector = tick.dashing ? jinete.dashDir : direction;
+  const speed =
+    (tick.dashing ? JINETE_DASH_SPEED : JINETE_SPEED) * enemyScale;
   jinete.body.setVelocity(vector.x * speed, vector.y * speed);
   // El caballo siempre se ve erguido: no se rota el sprite, solo se refleja
   // en horizontal cuando su rumbo apunta hacia el oeste.
@@ -1053,7 +1140,7 @@ function checkContactDamage(scene, time) {
     ) {
       continue;
     }
-    applyDamage(scene, time);
+    applyDamage(scene, time, espanol);
     return;
   }
 }
@@ -1072,7 +1159,7 @@ function resolveMusketHits(scene, time) {
   }
 }
 
-function applyDamage(scene, time) {
+function applyDamage(scene, time, culprit) {
   const run = scene.state.run;
   const patriota = scene.patriota;
   const contact = applyContact(run.lives, run.invulnerableUntil, time);
@@ -1083,6 +1170,16 @@ function applyDamage(scene, time) {
   run.invulnerableUntil = contact.invulnerableUntil;
   run.knock = knockbackVector(patriota.x, patriota.y);
   run.knockUntil = time + KNOCK_MS;
+  // El Jinete no se queda encima del Patriota: si lo atropella en plena
+  // embestida galopa de largo; sin embestida, el caballo se empina y cede
+  // terreno mientras la invulnerabilidad protege a su víctima.
+  if (culprit && culprit.kind === "jinete") {
+    if (time < culprit.dashUntil) {
+      culprit.dashUntil = time + JINETE_DASH_MS;
+    } else {
+      culprit.stunnedUntil = time + JINETE_STUN_MS;
+    }
+  }
   refreshHud(scene);
   playSound(scene, "hurt");
   if (isDefeated(run.lives)) {
@@ -1266,7 +1363,8 @@ function musketTick(fusilero, planted, now) {
 }
 
 function jineteTick(jinete, now) {
-  return { dashing: now < jinete.dashUntil };
+  const stunned = now < jinete.stunnedUntil;
+  return { stunned, dashing: !stunned && now < jinete.dashUntil };
 }
 
 function towardVector(fromX, fromY, toX, toY) {
@@ -1459,78 +1557,185 @@ function isDefeated(lives) {
   return lives <= 0;
 }
 
+// --- fuente de píxel ----------------------------------------------------------
+// Tipografía arcade 5x7: cada glifo son siete filas en 14 dígitos hex (el bit 4
+// es la columna izquierda). Todo el texto del juego — del marcador a las
+// iniciales — se dibuja con esta fuente, así el texto se ve igual en la
+// máquina del gabinete, sin depender de fuentes del sistema.
+
+const FONT_SPEC =
+  " 00000000000000" +
+  "A0E11111F111111" +
+  "B1E11111E11111E" +
+  "C0E11101010110E" +
+  "D1E11111111111E" +
+  "E1F10101E10101F" +
+  "F1F10101E101010" +
+  "G0E11101711110E" +
+  "H1111111F111111" +
+  "I0E04040404040E" +
+  "J0702020202120C" +
+  "K11121418141211" +
+  "L1010101010101F" +
+  "M111B1515111111" +
+  "N11191513111111" +
+  "O0E11111111110E" +
+  "P1E11111E101010" +
+  "Q0E11111115120D" +
+  "R1E11111E141211" +
+  "S0F10100E01011E" +
+  "T1F040404040404" +
+  "U1111111111110E" +
+  "V11111111110A04" +
+  "W1111111515150A" +
+  "X11110A040A1111" +
+  "Y11110A04040404" +
+  "Z1F01020408101F" +
+  "Á040E111F111111" +
+  "É0410101E10101F" +
+  "Í040E040404040E" +
+  "Ó040E111111110E" +
+  "Ú0411111111110E" +
+  "Ñ0E111915131111" +
+  "00E11131519110E" +
+  "1040C040404040E" +
+  "20E11010608101F" +
+  "31E01010E01011E" +
+  "402060A121F0202" +
+  "51F101E0101110E" +
+  "60E10101E11110E" +
+  "71F010204080808" +
+  "80E11110E11110E" +
+  "90E11110F01010E" +
+  "¡04000404040404" +
+  "!04040404040004" +
+  "¿0400040C10110E" +
+  "?0E110106080004" +
+  "·00000004000000" +
+  ":00060600060600" +
+  ".00000000000606" +
+  ",00000000020408" +
+  "(02040808080402" +
+  ")08040202020408" +
+  "/01020204080810" +
+  "_0000000000001F";
+
+const FONT_COLUMNS = 16;
+
+// Estampa el abecedario en una textura en cuadrícula y la registra como fuente
+// de mapa de bits (RetroFont): 6x9 por celda, glifo de 5x7 con aire para respirar.
+function makeFont(scene) {
+  const g = scene.add.graphics();
+  g.fillStyle(0xffffff, 1);
+  const chars = [];
+  for (let i = 0; i < FONT_SPEC.length; i += 15) {
+    const cell = chars.length;
+    chars.push(FONT_SPEC[i]);
+    for (let row = 0; row < 7; row += 1) {
+      const bits = parseInt(FONT_SPEC.substr(i + 1 + row * 2, 2), 16);
+      for (let col = 0; col < 5; col += 1) {
+        if (bits & (16 >> col)) {
+          g.fillRect(
+            (cell % FONT_COLUMNS) * 6 + col,
+            ((cell / FONT_COLUMNS) | 0) * 9 + row,
+            1,
+            1,
+          );
+        }
+      }
+    }
+  }
+  g.generateTexture("pixfont", 96, 36);
+  g.destroy();
+  scene.cache.bitmapFont.add(
+    "pix",
+    Phaser.GameObjects.RetroFont.Parse(scene, {
+      image: "pixfont",
+      width: 6,
+      height: 9,
+      chars: chars.join(""),
+      charsPerRow: FONT_COLUMNS,
+    }),
+  );
+}
+
+// Todo texto del juego nace aquí: mayúsculas, tinte y escala del tipo arcade.
+function pixText(scene, x, y, text, scale, color, originX = 0.5, originY = 0.5) {
+  return scene.add
+    .bitmapText(x, y, "pix", String(text).toUpperCase())
+    .setOrigin(originX, originY)
+    .setScale(scale)
+    .setTint(color);
+}
+
+// Cambiar texto a un rótulo ya creado: sin mayúsculas se pierden glifos.
+function setPixText(target, text) {
+  target.setText(String(text).toUpperCase());
+}
+
+function createHearts(scene) {
+  const g = scene.add.graphics();
+  const drawHeart = (color) => {
+    g.clear();
+    g.fillStyle(COLORS.frame, 1);
+    g.fillCircle(5, 5, 5.2);
+    g.fillCircle(12, 5, 5.2);
+    g.fillTriangle(0.4, 6, 16.6, 6, 8.5, 15.6);
+    g.fillStyle(color, 1);
+    g.fillCircle(5, 5, 3.8);
+    g.fillCircle(12, 5, 3.8);
+    g.fillTriangle(1.9, 6.5, 15.1, 6.5, 8.5, 13.8);
+    if (color === COLORS.heart) {
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(4, 3.5, 1.4);
+    }
+  };
+  drawHeart(COLORS.heart);
+  g.generateTexture("corazonLleno", 17, 16);
+  drawHeart(COLORS.leather);
+  g.generateTexture("corazonVacio", 17, 16);
+  g.destroy();
+}
+
 // --- HUD ----------------------------------------------------------------------
 
 function createHud(scene) {
-  scene.hud = {};
+  scene.hud = { livesShown: LIVES_TOTAL };
 
-  scene.hud.score = scene.add
-    .text(28, 22, "PUNTOS 0000", {
-      fontFamily: "monospace",
-      fontSize: "22px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-    })
-    .setDepth(10);
+  // Franja de cuero oscuro tras los elementos marcados.
+  scene.add
+    .rectangle(GAME_WIDTH / 2, 24, GAME_WIDTH, 48, COLORS.backdrop, 0.62)
+    .setDepth(9);
+  scene.add
+    .rectangle(GAME_WIDTH / 2, 48, GAME_WIDTH, 2, COLORS.accent, 0.35)
+    .setDepth(9);
 
-  scene.hud.lives = scene.add
-    .text(GAME_WIDTH / 2, 22, "VIDAS 3", {
-      fontFamily: "monospace",
-      fontSize: "22px",
-      color: "#c0392b",
-      fontStyle: "bold",
-    })
-    .setOrigin(0.5, 0)
-    .setDepth(10);
+  scene.hud.score = pixText(scene, 16, 24, "PUNTOS 0000", 3, COLORS.accent, 0, 0.5).setDepth(10);
 
-  scene.hud.oleada = scene.add
-    .text(GAME_WIDTH - 28, 22, "OLEADA 01", {
-      fontFamily: "monospace",
-      fontSize: "22px",
-      color: "#f2ead0",
-      fontStyle: "bold",
-    })
-    .setOrigin(1, 0)
-    .setDepth(10);
+  // Tres corazones: llenos son vidas; vacíos, recuerdan lo perdido.
+  scene.hud.hearts = [0, 1, 2].map((i) =>
+    scene.add
+      .image(GAME_WIDTH / 2 + (i - 1) * 27, 24, "corazonLleno")
+      .setDepth(10),
+  );
 
-  scene.hud.status = scene.add
-    .text(GAME_WIDTH / 2, GAME_HEIGHT - 20, "", {
-      fontFamily: "monospace",
-      fontSize: "13px",
-      color: "#f2ead0",
-      align: "center",
-    })
-    .setOrigin(0.5)
-    .setDepth(10);
+  scene.hud.oleada = pixText(scene, GAME_WIDTH - 16, 24, "OLEADA 01", 3, COLORS.patriota, 1, 0.5).setDepth(10);
 
-  // Medidor de la Piedra: una Piedra lista cada 1500 puntos y, lista, anuncia
+  scene.hud.status = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 16, "", 2, COLORS.patriota).setDepth(10);
+
+  // Medidor de la Piedra: icono de roca junto a la barra; lista, anuncia
   // ¡PIEDRA LISTA! parpadeando en su lugar.
+  scene.hud.piedraIcon = scene.add.image(46, 58, "piedra").setScale(PIEDRA_ICON_SCALE).setDepth(10);
   scene.hud.piedraBarBg = scene.add
-    .rectangle(28 + PIEDRA_BAR / 2, 58, PIEDRA_BAR + 6, 10, COLORS.cell, 0.9)
-    .setStrokeStyle(1, COLORS.frame, 0.9)
+    .rectangle(66 + PIEDRA_BAR / 2, 58, PIEDRA_BAR + 8, 12, COLORS.cell, 0.9)
+    .setStrokeStyle(2, COLORS.frame, 1)
     .setDepth(10);
   scene.hud.piedraFill = scene.add
-    .rectangle(28, 58, PIEDRA_BAR, 6, COLORS.accent)
+    .rectangle(68, 58, PIEDRA_BAR, 7, COLORS.accent)
     .setOrigin(0, 0.5)
     .setDepth(10);
-  scene.hud.piedraCaption = scene.add
-    .text(28 + PIEDRA_BAR + 12, 58, "PIEDRA", {
-      fontFamily: "monospace",
-      fontSize: "10px",
-      color: "#b39a5f",
-    })
-    .setOrigin(0, 0.5)
-    .setDepth(10);
-  scene.hud.piedraReady = scene.add
-    .text(28, 58, "¡PIEDRA LISTA!", {
-      fontFamily: "monospace",
-      fontSize: "17px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-      stroke: "#584b34",
-      strokeThickness: 3,
-    })
-    .setOrigin(0, 0.5)
+
+  scene.hud.piedraReady = pixText(scene, 66, 58, "¡PIEDRA LISTA!", 2, COLORS.accent, 0, 0.5)
     .setDepth(10)
     .setVisible(false);
   scene.tweens.add({
@@ -1556,11 +1761,17 @@ function updatePiedraHud(scene, tick) {
   const ready = scene.state.run.piedraBank > 0;
   const fill = Math.max(0, Math.min(1, tick.progress / PIEDRA_STEP));
   scene.hud.piedraBarBg.setVisible(!ready);
-  scene.hud.piedraCaption.setVisible(!ready);
   scene.hud.piedraFill.setVisible(!ready);
-  scene.hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 1), 6);
+  scene.hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 2), 7);
   scene.hud.piedraReady.setVisible(ready);
   if (tick.granted) {
+    scene.tweens.killTweensOf(scene.hud.piedraIcon);
+    scene.tweens.add({
+      targets: scene.hud.piedraIcon,
+      scale: { from: PIEDRA_ICON_POP, to: PIEDRA_ICON_SCALE },
+      duration: 220,
+      ease: "Bounce.easeOut",
+    });
     playSound(scene, "listo");
   }
 }
@@ -1568,39 +1779,51 @@ function updatePiedraHud(scene, tick) {
 function refreshHud(scene) {
   // El medidor de la Piedra avanza aquí: todo punto que sume a la puntuación
   // termina pasando por refreshHud, y así el medidor nunca queda atrás.
-  scene.hud.score.setText(
-    `PUNTOS ${String(scene.state.run.score).padStart(4, "0")}`,
-  );
-  scene.hud.lives.setText(`VIDAS ${scene.state.run.lives}`);
-  scene.hud.oleada.setText(
+  setPixText(scene.hud.score, `PUNTOS ${String(scene.state.run.score).padStart(4, "0")}`);
+  setPixText(
+    scene.hud.oleada,
     `OLEADA ${String(scene.state.run.oleada).padStart(2, "0")}`,
   );
+  // Los corazones solo se repintan cuando la vida cambia; perder un corazón
+  // se anuncia con un latido fuerte, y recobrarlo con uno suave.
+  const lives = scene.state.run.lives;
+  if (lives !== scene.hud.livesShown) {
+    scene.hud.livesShown = lives;
+    for (let i = 0; i < scene.hud.hearts.length; i += 1) {
+      const heart = scene.hud.hearts[i];
+      const full = i < lives;
+      const texture = full ? "corazonLleno" : "corazonVacio";
+      if (heart.texture.key === texture) {
+        continue;
+      }
+      heart.setTexture(texture);
+      scene.tweens.add({
+        targets: heart,
+        scale: { from: full ? 1 : 1.5, to: 1 },
+        duration: 200,
+        ease: full ? "Back.easeOut" : "Quad.easeIn",
+      });
+    }
+  }
   updatePiedraHud(scene, tickPiedraGauge(scene));
 }
 
 function showOleadaSplash(scene, oleada) {
-  const splash = scene.add
-    .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, `¡OLEADA ${oleada}!`, {
-      fontFamily: "monospace",
-      fontSize: "44px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-      stroke: "#584b34",
-      strokeThickness: 6,
-    })
-    .setOrigin(0.5)
-    .setDepth(30);
+  const text = `¡OLEADA ${oleada}!`;
+  const shadow = pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 57, text, 6, COLORS.frame).setDepth(29);
+  const splash = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, text, 6, COLORS.accent).setDepth(30);
 
   scene.tweens.add({
-    targets: splash,
+    targets: [splash, shadow],
     alpha: 0.12,
     duration: 150,
     yoyo: true,
     repeat: 9,
   });
   scene.time.delayedCall(1700, () => {
-    scene.tweens.killTweensOf(splash);
+    scene.tweens.killTweensOf([splash, shadow]);
     splash.destroy();
+    shadow.destroy();
   });
 }
 
@@ -1648,7 +1871,8 @@ function startRun(scene) {
   scene.patriota.setActive(true).setVisible(true);
 
   refreshHud(scene);
-  scene.hud.status.setText(
+  setPixText(
+    scene.hud.status,
     "BOTÓN 1: DISPARAR   BOTÓN 2: SABLE   BOTÓN 3: PIEDRA   START: PAUSA",
   );
   scene.state.phase = "playing";
@@ -1692,10 +1916,11 @@ function finishRun(scene) {
   scene.physics.pause();
   clearPressedControls(scene);
   scene.state.phase = "gameover";
-  scene.hud.status.setText("");
+  setPixText(scene.hud.status, "");
 
-  scene.endGame.rally.setText(Phaser.Math.RND.pick(DEFEAT_LINES));
-  scene.endGame.summary.setText(
+  setPixText(scene.endGame.rally, Phaser.Math.RND.pick(DEFEAT_LINES));
+  setPixText(
+    scene.endGame.summary,
     `PUNTOS ${String(scene.state.run.score).padStart(4, "0")} · OLEADA ${String(
       scene.state.run.oleada,
     ).padStart(2, "0")}`,
@@ -1725,7 +1950,7 @@ function finishRun(scene) {
     scene.state.saveStatus =
       "NO ENTRÓ EN LA TABLA. START: OTRA PARTIDA · BOTÓN 1: TÍTULO";
   }
-  scene.endGame.saveStatus.setText(scene.state.saveStatus);
+  setPixText(scene.endGame.saveStatus, scene.state.saveStatus);
   stopMusic(scene);
   playSound(scene, "defeat");
 }
@@ -1847,34 +2072,11 @@ function createStartScreen(scene) {
     ),
   );
 
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, 44, "PLATANUS HACK 26 · EDICIÓN CARACAS", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#b39a5f",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, 44, "PLATANUS HACK 26 · EDICIÓN CARACAS", 2, COLORS.dim));
 
-  const marqueeTop = scene.add
-    .text(GAME_WIDTH / 2, 100, "BATALLA DE", {
-      fontFamily: "monospace",
-      fontSize: "40px",
-      color: "#f2ead0",
-      fontStyle: "bold",
-    })
-    .setOrigin(0.5);
-  const marqueeBottom = scene.add
-    .text(GAME_WIDTH / 2, 150, "MATASIETE", {
-      fontFamily: "monospace",
-      fontSize: "52px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-      stroke: "#584b34",
-      strokeThickness: 5,
-    })
-    .setOrigin(0.5);
+  const marqueeTop = pixText(scene, GAME_WIDTH / 2, 96, "BATALLA DE", 5, COLORS.patriota);
+  c.add(pixText(scene, GAME_WIDTH / 2 + 4, 163, "MATASIETE", 7, COLORS.frame));
+  const marqueeBottom = pixText(scene, GAME_WIDTH / 2, 160, "MATASIETE", 7, COLORS.accent);
   c.add(marqueeTop);
   c.add(marqueeBottom);
   scene.tweens.add({
@@ -1896,41 +2098,12 @@ function createStartScreen(scene) {
     300,
   );
 
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, 396, "MEJORES PUNTUAJES", {
-        fontFamily: "monospace",
-        fontSize: "13px",
-        color: "#f2c14e",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5),
-  );
-  scene.startScreen.leaderboard = scene.add
-    .text(GAME_WIDTH / 2, 418, "", {
-      fontFamily: "monospace",
-      fontSize: "13px",
-      color: "#f2ead0",
-      align: "center",
-      lineSpacing: 4,
-    })
-    .setOrigin(0.5, 0);
+  c.add(pixText(scene, GAME_WIDTH / 2, 400, "MEJORES PUNTUAJES", 3, COLORS.accent));
+  scene.startScreen.leaderboard = pixText(scene, GAME_WIDTH / 2, 424, "", 2, COLORS.patriota, 0.5, 0);
+  scene.startScreen.leaderboard.lineSpacing = 4;
   c.add(scene.startScreen.leaderboard);
 
-  c.add(
-    scene.add
-      .text(
-        GAME_WIDTH / 2,
-        GAME_HEIGHT - 22,
-        "JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR",
-        {
-          fontFamily: "monospace",
-          fontSize: "11px",
-          color: "#8a7a50",
-        },
-      )
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 22, "JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR", 2, COLORS.dim));
 
   c.setVisible(false);
 }
@@ -1948,14 +2121,7 @@ function createMenuButtons(scene, container, labels, yStart, yStep, width) {
       0.95,
     );
     bg.setStrokeStyle(2, COLORS.frame, 0.8);
-    const label = scene.add
-      .text(GAME_WIDTH / 2, y, labels[i], {
-        fontFamily: "monospace",
-        fontSize: "20px",
-        color: "#f2ead0",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
+    const label = pixText(scene, GAME_WIDTH / 2, y, labels[i], 3, COLORS.patriota);
     container.add(bg);
     container.add(label);
     buttons.push({ bg, label });
@@ -1968,7 +2134,7 @@ function updateMenuHighlight(buttons, cursor) {
     const active = i === cursor;
     bg.setFillStyle(active ? COLORS.accent : COLORS.cell, active ? 1 : 0.95);
     bg.setStrokeStyle(2, active ? COLORS.sand : COLORS.frame, active ? 1 : 0.8);
-    label.setColor(active ? "#2a2214" : "#f2ead0");
+    label.setTint(active ? COLORS.cell : COLORS.patriota);
   });
 }
 
@@ -2035,46 +2201,20 @@ function createLeaderboardScreen(scene) {
       0.98,
     ),
   );
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, 90, "MEJORES PUNTUAJES", {
-        fontFamily: "monospace",
-        fontSize: "30px",
-        color: "#f2c14e",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, 88, "MEJORES PUNTUAJES", 4, COLORS.accent));
 
-  scene.leaderScreen.list = scene.add
-    .text(GAME_WIDTH / 2, 170, "", {
-      fontFamily: "monospace",
-      fontSize: "20px",
-      color: "#f2ead0",
-      align: "center",
-      lineSpacing: 14,
-    })
-    .setOrigin(0.5, 0);
+  scene.leaderScreen.list = pixText(scene, GAME_WIDTH / 2, 160, "", 3, COLORS.patriota, 0.5, 0);
+  scene.leaderScreen.list.lineSpacing = 14;
   c.add(scene.leaderScreen.list);
 
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#8a7a50",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, COLORS.dim));
 
   c.setVisible(false);
 }
 
 function showLeaderboardScreen(scene) {
   clearPressedControls(scene);
-  scene.leaderScreen.list.setText(
-    formatHighScores(scene.state.highScores).join("\n"),
-  );
+  setPixText(scene.leaderScreen.list, formatHighScores(scene.state.highScores).join("\n"));
   scene.startScreen.container.setVisible(false);
   scene.leaderScreen.container.setVisible(true);
   scene.state.phase = "leaderboard";
@@ -2095,16 +2235,7 @@ function createControlsScreen(scene) {
       0.98,
     ),
   );
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, 100, "¿CONTROLES?", {
-        fontFamily: "monospace",
-        fontSize: "30px",
-        color: "#f2c14e",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, 96, "¿CONTROLES?", 4, COLORS.accent));
 
   const lines = [
     "JOYSTICK ....... MOVER · ELEGIR",
@@ -2123,27 +2254,17 @@ function createControlsScreen(scene) {
     "",
     "RENDIRSE TERMINA LA PARTIDA",
   ];
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, 180, lines.join("\n"), {
-        fontFamily: "monospace",
-        fontSize: "16px",
-        color: "#f2ead0",
-        align: "center",
-        lineSpacing: 8,
-      })
-      .setOrigin(0.5, 0),
-  );
+  let lineY = 146;
+  for (const line of lines) {
+    if (line === "") {
+      lineY += 10;
+      continue;
+    }
+    c.add(pixText(scene, GAME_WIDTH / 2, lineY, line, 2, COLORS.patriota));
+    lineY += 24;
+  }
 
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#8a7a50",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, COLORS.dim));
 
   c.setVisible(false);
 }
@@ -2162,15 +2283,11 @@ function closeAttractScreen(scene) {
 }
 
 function refreshStartScreenLeaderboard(scene) {
-  scene.startScreen.leaderboard.setText(
-    formatHighScores(scene.state.highScores).join("\n"),
-  );
+  setPixText(scene.startScreen.leaderboard, formatHighScores(scene.state.highScores).join("\n"));
 }
 
 function refreshLeaderboard(scene) {
-  scene.endGame.leaderboard.setText(
-    formatHighScores(scene.state.highScores).join("\n"),
-  );
+  setPixText(scene.endGame.leaderboard, formatHighScores(scene.state.highScores).join("\n"));
 }
 
 function refreshAllLeaderboards(scene) {
@@ -2207,16 +2324,8 @@ function createPauseScreen(scene) {
       0.85,
     ),
   );
-  c.add(
-    scene.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, "PAUSA", {
-        fontFamily: "monospace",
-        fontSize: "52px",
-        color: "#f2c14e",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 97, "PAUSA", 7, COLORS.frame));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, "PAUSA", 7, COLORS.accent));
 
   scene.pauseScreen.buttons = createMenuButtons(
     scene,
@@ -2227,20 +2336,7 @@ function createPauseScreen(scene) {
     280,
   );
 
-  c.add(
-    scene.add
-      .text(
-        GAME_WIDTH / 2,
-        GAME_HEIGHT / 2 + 120,
-        "JOYSTICK: ELEGIR   START: CONFIRMAR",
-        {
-          fontFamily: "monospace",
-          fontSize: "12px",
-          color: "#8a7a50",
-        },
-      )
-      .setOrigin(0.5),
-  );
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, "JOYSTICK: ELEGIR   START: CONFIRMAR", 2, COLORS.dim));
 
   c.setVisible(false);
 }
@@ -2281,81 +2377,24 @@ function createEndGameUi(scene) {
     ),
   );
 
-  scene.endGame.title = scene.add
-    .text(GAME_WIDTH / 2, 64, "¡DERROTA!", {
-      fontFamily: "monospace",
-      fontSize: "40px",
-      color: "#c0392b",
-      fontStyle: "bold",
-    })
-    .setOrigin(0.5);
+  c.add(pixText(scene, GAME_WIDTH / 2 + 3, 67, "¡DERROTA!", 6, COLORS.frame));
+  scene.endGame.title = pixText(scene, GAME_WIDTH / 2, 64, "¡DERROTA!", 6, COLORS.sash);
 
-  scene.endGame.rally = scene.add
-    .text(GAME_WIDTH / 2, 112, "", {
-      fontFamily: "monospace",
-      fontSize: "18px",
-      color: "#f2c14e",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.rally = pixText(scene, GAME_WIDTH / 2, 116, "", 3, COLORS.accent);
 
-  scene.endGame.summary = scene.add
-    .text(GAME_WIDTH / 2, 144, "", {
-      fontFamily: "monospace",
-      fontSize: "16px",
-      color: "#f2ead0",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.summary = pixText(scene, GAME_WIDTH / 2, 150, "", 3, COLORS.patriota);
 
-  scene.endGame.nameLabel = scene.add
-    .text(GAME_WIDTH / 2, 180, "INICIALES", {
-      fontFamily: "monospace",
-      fontSize: "13px",
-      color: "#8a7a50",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.nameLabel = pixText(scene, GAME_WIDTH / 2, 186, "INICIALES", 2, COLORS.dim);
 
-  scene.endGame.nameValue = scene.add
-    .text(GAME_WIDTH / 2, 214, "___", {
-      fontFamily: "monospace",
-      fontSize: "34px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-      align: "center",
-      letterSpacing: 10,
-    })
-    .setOrigin(0.5);
+  scene.endGame.nameValue = pixText(scene, GAME_WIDTH / 2, 224, "___", 5, COLORS.accent);
+  scene.endGame.nameValue.setLetterSpacing(10);
 
-  scene.endGame.instructions = scene.add
-    .text(GAME_WIDTH / 2, 246, "MOVER: ELEGIR   BOTÓN 1: CONFIRMAR", {
-      fontFamily: "monospace",
-      fontSize: "11px",
-      color: "#8a7a50",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.instructions = pixText(scene, GAME_WIDTH / 2, 258, "MOVER: ELEGIR   BOTÓN 1: CONFIRMAR", 2, COLORS.dim);
 
-  scene.endGame.leaderboardTitle = scene.add
-    .text(GAME_WIDTH / 2, 280, "MEJORES PUNTUAJES", {
-      fontFamily: "monospace",
-      fontSize: "13px",
-      color: "#f2c14e",
-      fontStyle: "bold",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.leaderboardTitle = pixText(scene, GAME_WIDTH / 2, 288, "MEJORES PUNTUAJES", 3, COLORS.accent);
 
-  scene.endGame.leaderboard = scene.add
-    .text(GAME_WIDTH / 2, 300, "", {
-      fontFamily: "monospace",
-      fontSize: "12px",
-      color: "#f2ead0",
-      align: "center",
-      lineSpacing: 3,
-    })
-    .setOrigin(0.5, 0);
+  scene.endGame.leaderboard = pixText(scene, GAME_WIDTH / 2, 308, "", 2, COLORS.patriota, 0.5, 0);
+  scene.endGame.leaderboard.lineSpacing = 4;
 
   scene.endGame.gridLabels = [];
   for (let row = 0; row < LETTER_GRID.length; row += 1) {
@@ -2364,28 +2403,27 @@ function createEndGameUi(scene) {
     for (let col = 0; col < rowValues.length; col += 1) {
       const value = rowValues[col];
       const cellX = GAME_WIDTH / 2 - rowWidth / 2 + 29 + col * 58;
-      const cellY = 408 + row * 30;
+      const cellY = 412 + row * 30;
       const wide = value.length > 1;
 
       const cell = scene.add.rectangle(
         cellX,
         cellY,
         wide ? 96 : 42,
-        24,
+        26,
         COLORS.cell,
         0.95,
       );
       cell.setStrokeStyle(2, COLORS.frame, 0.8);
 
-      const label = scene.add
-        .text(cellX, cellY, value, {
-          fontFamily: "monospace",
-          fontSize: wide ? "13px" : "18px",
-          color: "#f2ead0",
-          fontStyle: "bold",
-          align: "center",
-        })
-        .setOrigin(0.5);
+      const label = pixText(
+        scene,
+        cellX,
+        cellY,
+        value,
+        wide ? 2 : 3,
+        COLORS.patriota,
+      );
 
       scene.endGame.gridLabels.push({ cell, label, row, col, value });
       c.add(cell);
@@ -2393,14 +2431,7 @@ function createEndGameUi(scene) {
     }
   }
 
-  scene.endGame.saveStatus = scene.add
-    .text(GAME_WIDTH / 2, 584, "", {
-      fontFamily: "monospace",
-      fontSize: "11px",
-      color: "#f2c14e",
-      align: "center",
-    })
-    .setOrigin(0.5);
+  scene.endGame.saveStatus = pixText(scene, GAME_WIDTH / 2, 584, "", 2, COLORS.accent);
 
   c.add(scene.endGame.title);
   c.add(scene.endGame.rally);
@@ -2477,7 +2508,7 @@ function updateLetterGridHighlight(scene) {
       active ? COLORS.sand : COLORS.frame,
       active ? 1 : 0.8,
     );
-    item.label.setColor(active ? "#2a2214" : "#f2ead0");
+    item.label.setTint(active ? COLORS.cell : COLORS.patriota);
   }
 }
 
@@ -2493,7 +2524,8 @@ function activateCurrentLetter(scene) {
 
   if (selectedValue === "LISTO") {
     if (entry.letters.length === 0) {
-      scene.endGame.saveStatus.setText(
+      setPixText(
+        scene.endGame.saveStatus,
         "Elige al menos un carácter antes de guardar.",
       );
       return;
@@ -2514,7 +2546,7 @@ function refreshNameEntry(scene) {
   while (letters.length < WINNING_NAME_LENGTH) {
     letters.push("_");
   }
-  scene.endGame.nameValue.setText(letters.join(" "));
+  setPixText(scene.endGame.nameValue, letters.join(" "));
 }
 
 function submitHighScore(scene) {
@@ -2536,7 +2568,7 @@ function submitHighScore(scene) {
   };
 
   scene.state.saveStatus = `¡Guardado ${initials}! START: OTRA PARTIDA · BOTÓN 1: TÍTULO`;
-  scene.endGame.saveStatus.setText(scene.state.saveStatus);
+  setPixText(scene.endGame.saveStatus, scene.state.saveStatus);
   clearPressedControls(scene);
   scene.state.phase = "saved";
 
@@ -2548,7 +2580,7 @@ function submitHighScore(scene) {
     .catch(() => {
       scene.state.saveStatus = "No se pudo guardar, pero la partida cuenta.";
       if (scene.state.phase === "saved") {
-        scene.endGame.saveStatus.setText(scene.state.saveStatus);
+        setPixText(scene.endGame.saveStatus, scene.state.saveStatus);
       }
     });
 }
@@ -2656,55 +2688,67 @@ async function storageSet(key, value) {
 // --- audio --------------------------------------------------------------------
 
 // Chiptune procedural: cada pista es una progresión escrita en MIDI (0 =
-// silencio) sobre Am–F–C–G, programada nota por nota con Web Audio. La
-// generación invalida la repetición cuando suena el siguiente estado, así dos
-// pistas jamás quedan encimadas y la derrota deja el salón en silencio.
+// silencio) sobre Am–F–Dm–E (lamentación menor con dominante y su G# de
+// tensión), programada nota por nota con Web Audio y cadencia de caja
+// militar. La generación invalida la repetición cuando suena el siguiente
+// estado, así dos pistas jamás quedan encimadas y la derrota deja el salón
+// en silencio.
 
 const TRACK_TITLE = {
-  step: 0.3,
-  drums: false,
-  leadType: "triangle",
-  leadVol: 0.05,
+  step: 0.33,
+  drums: true,
+  leadType: "sawtooth",
+  leadVol: 0.04,
+  // Marcha fúnebre: golpe largo al inicio de cada compás y suspiro al final.
   lead: [
-    69, 0, 72, 0, 76, 0, 72, 0,
-    65, 0, 69, 0, 72, 0, 69, 0,
-    72, 0, 76, 0, 79, 0, 76, 0,
-    81, 0, 79, 0, 76, 0, 72, 0,
+    69, 0, 0, 0, 76, 0, 72, 0,
+    74, 0, 0, 0, 77, 0, 76, 0,
+    72, 0, 0, 0, 74, 0, 71, 0,
+    68, 0, 0, 0, 64, 0, 0, 0,
   ],
+  // Pedal grave que re-marca la mitad del compás una octava arriba.
   bass: [
-    33, 0, 0, 0, 0, 0, 0, 0,
-    29, 0, 0, 0, 0, 0, 0, 0,
-    36, 0, 0, 0, 0, 0, 0, 0,
-    31, 0, 0, 0, 0, 0, 0, 0,
+    33, 0, 0, 0, 45, 0, 0, 0,
+    29, 0, 0, 0, 41, 0, 0, 0,
+    26, 0, 0, 0, 38, 0, 0, 0,
+    28, 0, 0, 0, 40, 0, 0, 0,
   ],
+  kicks: [0],
+  snares: [4],
+  hats: [],
 };
 
 const TRACK_BATTLE = {
   step: 0.21,
   drums: true,
-  leadType: "square",
-  leadVol: 0.055,
+  leadType: "sawtooth",
+  leadVol: 0.05,
+  // Corneta marcial en Am armónica: repeticiones punteadas, lamento
+  // descendente en F y cadencia con G# sobre la dominante.
   lead: [
-    69, 0, 72, 0, 76, 0, 72, 0,
-    65, 0, 69, 0, 72, 0, 69, 0,
-    72, 0, 76, 0, 79, 0, 81, 0,
-    74, 0, 71, 0, 67, 0, 71, 0,
-    69, 0, 72, 76, 79, 0, 76, 0,
-    65, 0, 69, 72, 77, 0, 72, 0,
-    72, 0, 76, 79, 84, 0, 81, 0,
-    79, 0, 76, 0, 74, 0, 71, 0,
+    69, 0, 0, 69, 72, 0, 71, 0,
+    77, 0, 76, 0, 74, 0, 72, 0,
+    74, 0, 0, 74, 77, 0, 76, 0,
+    68, 0, 71, 0, 64, 0, 0, 0,
+    69, 0, 69, 76, 81, 0, 76, 0,
+    74, 0, 74, 77, 81, 0, 77, 0,
+    77, 0, 77, 81, 84, 0, 81, 0,
+    80, 0, 76, 0, 68, 0, 64, 0,
   ],
   // El bajo camina por las raíces de la progresión: negras en la primera
   // vuelta, con corchea extra cuando el tema arranca a galopar (compases 5-8).
   bass: (() => {
     const bass = new Array(64).fill(0);
-    [33, 29, 36, 31, 33, 29, 36, 31].forEach((root, bar) => {
+    [33, 29, 26, 28, 33, 26, 29, 28].forEach((root, bar) => {
       for (const hit of bar < 4 ? [0, 2, 4] : [0, 2, 4, 6]) {
         bass[bar * 8 + hit] = root;
       }
     });
     return bass;
   })(),
+  kicks: [0, 4],
+  snares: [2, 5, 6],
+  hats: [],
 };
 
 function audioContext(scene) {
@@ -2768,6 +2812,24 @@ function hatTick(ctx, out, t, noise) {
   g.connect(out);
   src.start(t);
   src.stop(t + 0.06);
+}
+
+// La caja militar: chasquido de parche con banda centrada, seco y marcial.
+function snareDrum(ctx, out, t, noise) {
+  const src = ctx.createBufferSource();
+  src.buffer = noise;
+  const f = ctx.createBiquadFilter();
+  const g = ctx.createGain();
+  f.type = "bandpass";
+  f.frequency.value = 1900;
+  f.Q.value = 0.9;
+  g.gain.setValueAtTime(0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  src.connect(f);
+  f.connect(g);
+  g.connect(out);
+  src.start(t);
+  src.stop(t + 0.09);
 }
 
 function stopMusic(scene) {
@@ -2872,10 +2934,16 @@ function startMusic(scene, kind, delaySec) {
         tone(ctx, out, midiFreq(bass), at, track.step * 1.7, "triangle", 0.14);
       }
       if (track.drums) {
-        if (step % 4 === 0) {
+        const kicks = track.kicks || [0, 4];
+        const snares = track.snares || [];
+        const hats = track.hats === undefined ? [2, 6] : track.hats;
+        if (kicks.includes(i)) {
           kickDrum(ctx, out, at);
         }
-        if (step % 4 === 2) {
+        if (snares.includes(i)) {
+          snareDrum(ctx, out, at, noise);
+        }
+        if (hats.includes(i)) {
           hatTick(ctx, out, at, noise);
         }
       }
@@ -2904,7 +2972,7 @@ function playTitleJingle(scene) {
     [76, 0.26, 0.11],
     [81, 0.39, 0.5],
     [80, 0.95, 0.12],
-    [81, 1.1, 0.6],
+    [76, 1.1, 0.65],
   ];
   const t0 = ctx.currentTime + 0.05;
   for (const [midi, at, len] of notes) {
