@@ -9,9 +9,11 @@
 // Chiptune procedural con Web Audio: fanfarria y tema en el título, marcha en
 // bucle durante el combate (batería incluida) y un golpe de derrota con la
 // pista detenida. Sin archivos: todo se programa nota por nota en tiempo real.
-// Presentación: sprites más grandes y detallados (patriota ×1.5, piedra ×2),
-// tipografía arcade de píxel dibujada píxel a píxel en tiempo de carga y HUD
-// de cuero: panel oscuro, corazones por vida e icono de Piedra en el medidor.
+// Presentación: soldados vistos desde arriba (bicorne en bata, casco con
+// cresta, tricornio y fusil enbanderado) que giran sobre sus botas al cambiar
+// de rumbo, tipografía arcade de píxel con filtrado NEAREST (nítida a cualquier
+// escala) y HUD de cuero: panel con rótulo para el medidor de la Piedra, barra
+// segmentada y aviso ¡PIEDRA LISTA! en oro palpitante.
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
@@ -55,8 +57,8 @@ const PIEDRA_HIT_RANGE = 44;
 const PIEDRA_MARGIN = 24;
 const PIEDRA_BAR = 150;
 const PIEDRA_SPIN = 0.18;
-const PIEDRA_ICON_SCALE = 0.42;
-const PIEDRA_ICON_POP = 0.58;
+const PIEDRA_ICON_SCALE = 0.5;
+const PIEDRA_ICON_POP = 0.72;
 const OLEADA_BASE_COUNT = 3;
 const OLEADA_COUNT_CAP = 20;
 const OLEADA_SPAWN_MS = 500;
@@ -120,6 +122,40 @@ const COLORS = {
   dim: 0x8a7a50,
 };
 
+// Paleta plana: las marcas de COLOR se desglosan en nombres cortos para que el
+// código siga leyéndose igual y el minificado pese la mitad.
+const {
+  sand,
+  sandDark,
+  sandDune,
+  olive,
+  oliveDark,
+  cactus,
+  cactusDark,
+  stone,
+  stoneDark,
+  stoneLight,
+  mountain,
+  mountainDark,
+  frame,
+  accent,
+  cell,
+  overlay,
+  backdrop,
+  patriota,
+  sash,
+  skin,
+  hat,
+  royalist,
+  royalistDark,
+  trim,
+  horse,
+  horseDark,
+  heart,
+  leather,
+  dim,
+} = COLORS;
+
 const DEFEAT_LINES = [
   "¡La isla aún resiste, patriota!",
   "¡No dejes que Matasiete caiga!",
@@ -176,6 +212,10 @@ const config = {
   height: GAME_HEIGHT,
   parent: "game-root",
   backgroundColor: "#cdb276",
+  // Consejo de nitidez: todos los textures con filtrado NEAREST y píxeles
+  // redondeados — la fuente de píxel y los sprites no se emborronan al escalar.
+  pixelArt: true,
+  roundPixels: true,
   physics: {
     default: "arcade",
     arcade: {
@@ -332,10 +372,10 @@ function createStage(scene) {
   const rng = new Phaser.Math.RandomDataGenerator([1817]);
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.mountainDark, 1);
+  g.fillStyle(mountainDark, 1);
   g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-  g.fillStyle(COLORS.sand, 1);
+  g.fillStyle(sand, 1);
   g.beginPath();
   g.moveTo(58, 46);
   for (let x = 58; x <= GAME_WIDTH - 58; x += 40) {
@@ -356,7 +396,7 @@ function createStage(scene) {
   g.closePath();
   g.fillPath();
 
-  g.fillStyle(COLORS.mountain, 1);
+  g.fillStyle(mountain, 1);
   for (let i = 0; i < 26; i += 1) {
     const edge = rng.integerInRange(0, 3);
     const along = rng.integerInRange(
@@ -369,7 +409,7 @@ function createStage(scene) {
     g.fillEllipse(x, y, rng.integerInRange(18, 40), rng.integerInRange(12, 26));
   }
 
-  g.fillStyle(COLORS.sandDune, 0.55);
+  g.fillStyle(sandDune, 0.55);
   for (let i = 0; i < 10; i += 1) {
     g.fillEllipse(
       rng.integerInRange(120, GAME_WIDTH - 120),
@@ -379,7 +419,7 @@ function createStage(scene) {
     );
   }
 
-  g.fillStyle(COLORS.sandDark, 0.5);
+  g.fillStyle(sandDark, 0.5);
   for (let i = 0; i < 12; i += 1) {
     g.fillEllipse(
       rng.integerInRange(100, GAME_WIDTH - 100),
@@ -401,14 +441,14 @@ function createStage(scene) {
 
   for (let i = 0; i < 14; i += 1) {
     const spot = safeSpot(rng);
-    g.fillStyle(COLORS.olive, 0.85);
+    g.fillStyle(olive, 0.85);
     g.fillEllipse(
       spot.x,
       spot.y,
       rng.integerInRange(10, 22),
       rng.integerInRange(6, 12),
     );
-    g.fillStyle(COLORS.oliveDark, 0.7);
+    g.fillStyle(oliveDark, 0.7);
     g.fillEllipse(
       spot.x + 3,
       spot.y + 2,
@@ -434,22 +474,22 @@ function safeSpot(rng) {
 
 function drawStone(g, x, y, rng) {
   const size = rng.integerInRange(14, 32);
-  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillStyle(stoneDark, 1);
   g.fillEllipse(x, y + 3, size, size * 0.62);
-  g.fillStyle(COLORS.stone, 1);
+  g.fillStyle(stone, 1);
   g.fillEllipse(x - 1, y - 1, size * 0.86, size * 0.52);
-  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillStyle(stoneLight, 1);
   g.fillEllipse(x - size * 0.2, y - size * 0.22, size * 0.3, size * 0.18);
 }
 
 function drawCactus(g, x, y, rng) {
   const h = rng.integerInRange(30, 46);
-  g.fillStyle(COLORS.cactusDark, 1);
+  g.fillStyle(cactusDark, 1);
   g.fillRoundedRect(x - 6, y - h / 2, 12, h, 6);
-  g.fillStyle(COLORS.cactus, 1);
+  g.fillStyle(cactus, 1);
   g.fillRoundedRect(x - 4, y - h / 2 - 1, 7, h - 2, 4);
   const armY = y - h / 4;
-  g.fillStyle(COLORS.cactus, 1);
+  g.fillStyle(cactus, 1);
   g.fillRoundedRect(x + 4, armY, 12, 7, 3.5);
   g.fillRoundedRect(x + 12, armY - 9, 7, 15, 3.5);
 }
@@ -457,45 +497,51 @@ function drawCactus(g, x, y, rng) {
 function createPatriota(scene) {
   const g = scene.add.graphics();
 
-  // Mochila a la espalda.
-  g.fillStyle(COLORS.horseDark, 1);
-  g.fillRoundedRect(4, 14, 7, 10, 2.5);
+  // Sombra en la arena.
+  g.fillStyle(0x000000, 0.16);
+  g.fillEllipse(15, 20, 28, 22);
 
-  // Casaca blanca con contorno, faja roja y cuello dorado; botas abajo.
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRoundedRect(7, 11, 19, 20, 6);
-  g.fillStyle(COLORS.patriota, 1);
-  g.fillRoundedRect(8.5, 12.5, 16, 17, 5);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(19, 30, 6, 5);
-  g.fillRect(11, 30, 6, 5);
-  g.fillStyle(COLORS.sash, 1);
-  g.fillRect(8.5, 20, 16, 4);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(14, 13.5, 5, 2);
+  // Mochila a la espalda: el oeste es atrás para un sprite mirando al este.
+  g.fillStyle(horseDark, 1);
+  g.fillRoundedRect(1, 14, 7, 8, 2);
 
-  // Rostro con ojo, sombrero bicornio con escarapela roja.
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(24, 15, 7, 9);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(26, 13.5, 2, 2);
-  g.fillStyle(COLORS.hat, 1);
-  g.fillTriangle(15, 12, 33, 12, 25, 3);
-  g.fillStyle(COLORS.sash, 1);
-  g.fillRect(22, 9, 6, 2);
+  // Casaca blanca: hombros de lado a lado, faja roja sobre el hombro.
+  g.fillStyle(frame, 1);
+  g.fillRoundedRect(6, 9, 14, 18, 5);
+  g.fillStyle(patriota, 1);
+  g.fillRoundedRect(7.5, 10.5, 11, 15, 4);
+  g.fillStyle(sash, 1);
+  g.fillRect(13, 10.5, 3, 15);
 
-  // Brazo alzado con el fusil y bayoneta listada.
-  g.fillStyle(COLORS.patriota, 1);
-  g.fillRoundedRect(17, 16, 6, 6, 2);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillCircle(24, 18, 2.2);
-  g.lineStyle(3, COLORS.frame, 1);
+  // Fusil enbanderado apuntando al este: culata, guardamanos, cañón y bayoneta.
+  g.fillStyle(hat, 1);
+  g.fillRoundedRect(8.5, 22.5, 8.5, 5, 1.5);
+  g.lineStyle(3, frame, 1);
   g.beginPath();
-  g.moveTo(23, 17);
-  g.lineTo(34, 10);
+  g.moveTo(16.5, 25);
+  g.lineTo(32, 25);
   g.strokePath();
-  g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(33, 7.5, 35.5, 9.5, 33.5, 11);
+  g.fillStyle(trim, 1);
+  g.fillRect(16.5, 23.6, 3, 3);
+  g.fillTriangle(31, 22.6, 34.5, 25, 31, 27.4);
+
+  // Brazo doblado hacia la culata y ambas manos sobre el arma.
+  g.fillStyle(patriota, 1);
+  g.fillRoundedRect(8, 20.5, 8, 4.5, 2);
+  g.fillStyle(skin, 1);
+  g.fillCircle(14.5, 25, 2.1);
+  g.fillCircle(20, 24.4, 2);
+
+  // Rostro asomando y bicorne en bata (de frente atrás) con vivo dorado y
+  // escarapela roja: desde arriba se ve el sombrero caminando por la arena.
+  g.fillStyle(skin, 1);
+  g.fillEllipse(23.5, 17.5, 5, 6.5);
+  g.fillStyle(hat, 1);
+  g.fillEllipse(16.5, 17.5, 15, 10);
+  g.fillStyle(accent, 1);
+  g.fillRect(22, 14, 2, 7);
+  g.fillStyle(sash, 1);
+  g.fillCircle(12, 17.5, 1.7);
 
   g.generateTexture("patriota", 36, 36);
   g.destroy();
@@ -515,9 +561,9 @@ function createPatriota(scene) {
 
 function createBullets(scene) {
   const g = scene.add.graphics();
-  g.fillStyle(COLORS.frame, 1);
+  g.fillStyle(frame, 1);
   g.fillEllipse(12, 8, 24, 12);
-  g.fillStyle(COLORS.accent, 1);
+  g.fillStyle(accent, 1);
   g.fillEllipse(12, 8, 19, 8);
   g.fillStyle(0xfdf6e3, 1);
   g.fillEllipse(15, 7.5, 8, 4);
@@ -530,13 +576,13 @@ function createBullets(scene) {
 function createSable(scene) {
   const g = scene.add.graphics();
   const c = 64;
-  g.fillStyle(COLORS.frame, 0.85);
+  g.fillStyle(frame, 0.85);
   g.slice(c, c, c, -Math.PI / 4, Math.PI / 4, false);
   g.fillPath();
-  g.fillStyle(COLORS.trim, 0.7);
+  g.fillStyle(trim, 0.7);
   g.slice(c, c, c - 12, -Math.PI / 4, Math.PI / 4, false);
   g.fillPath();
-  g.fillStyle(COLORS.accent, 0.9);
+  g.fillStyle(accent, 0.9);
   g.slice(c, c, c - 30, -Math.PI / 4, Math.PI / 4, false);
   g.fillPath();
   g.generateTexture("arco", 2 * c, 2 * c);
@@ -651,20 +697,20 @@ function clearMusketBalls(scene) {
 function createPiedra(scene) {
   const g = scene.add.graphics();
 
-  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillStyle(stoneDark, 1);
   g.fillCircle(28, 29, 26);
-  g.fillStyle(COLORS.stone, 1);
+  g.fillStyle(stone, 1);
   g.fillCircle(28, 26, 24);
-  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillStyle(stoneLight, 1);
   g.fillCircle(19, 16, 8);
   g.fillCircle(15, 12, 3);
-  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillStyle(stoneDark, 1);
   g.fillCircle(11, 36, 5.5);
   g.fillCircle(38, 41, 6.5);
   g.fillCircle(30, 45, 4.5);
   g.fillCircle(44, 17, 5);
   g.fillCircle(37, 27, 3.5);
-  g.lineStyle(2, COLORS.stoneDark, 1);
+  g.lineStyle(2, stoneDark, 1);
   g.beginPath();
   g.moveTo(28, 6);
   g.lineTo(24, 20);
@@ -773,36 +819,41 @@ function createEspanoles(scene) {
 function drawLanceroTexture(scene) {
   const g = scene.add.graphics();
 
-  // Casaca azul real con contorno, banda cruzada blanca y botas.
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRoundedRect(7, 10, 23, 21, 6);
-  g.fillStyle(COLORS.royalist, 1);
-  g.fillRoundedRect(8.5, 11.5, 20, 18, 5);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillRect(9, 20, 19, 3);
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRect(10, 30, 6, 4);
-  g.fillRect(18, 30, 6, 4);
+  // Sombra en la arena.
+  g.fillStyle(0x000000, 0.16);
+  g.fillEllipse(14, 19, 26, 22);
 
-  // Casco con penacho dorado y rostro con mirada al frente.
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRoundedRect(11, 3, 13, 10, 4);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(11, 7, 13, 2);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(10, 11, 17, 11, 10, 5);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(21, 17, 7, 8);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(23, 15, 2, 2);
+  // Casaca azul real: hombros de lado a lado con bandolera blanca al frente.
+  g.fillStyle(frame, 1);
+  g.fillRoundedRect(4, 9, 14, 18, 5);
+  g.fillStyle(royalist, 1);
+  g.fillRoundedRect(5.5, 10.5, 11, 15, 4);
+  g.fillStyle(trim, 1);
+  g.fillRect(12.5, 10.5, 3, 15);
 
-  // Lanza larga con banderín al viento.
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(29, 15, 13, 3);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(41, 13, 45, 16.5, 41, 20);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillTriangle(31, 9, 31, 16, 39, 12.5);
+  // Lanza larga hacia el este: asta, banderín al viento y punta de acero.
+  g.lineStyle(3, frame, 1);
+  g.beginPath();
+  g.moveTo(9, 25);
+  g.lineTo(43, 25);
+  g.strokePath();
+  g.fillStyle(trim, 1);
+  g.fillTriangle(42, 22.8, 45.5, 25, 42, 27.2);
+  g.fillStyle(accent, 1);
+  g.fillTriangle(30, 19, 30, 25, 38, 22);
+
+  // Mano empuñando y rostro asomando bajo el casco.
+  g.fillStyle(skin, 1);
+  g.fillCircle(15, 25, 2.1);
+  g.fillEllipse(21, 17, 5, 6.5);
+
+  // Casco desde arriba con cresta dorada y penacho caído hacia atrás.
+  g.fillStyle(royalistDark, 1);
+  g.fillEllipse(13.5, 17, 13, 9);
+  g.fillStyle(accent, 1);
+  g.fillRect(8.5, 15.8, 10, 2.2);
+  g.fillStyle(trim, 1);
+  g.fillTriangle(4, 15, 8.5, 17, 4, 19);
 
   g.generateTexture("lancero", 46, 34);
   g.destroy();
@@ -811,36 +862,43 @@ function drawLanceroTexture(scene) {
 function drawFusileroTexture(scene) {
   const g = scene.add.graphics();
 
-  // Casaca azul con contorno, morral a la espalda y cinturón cruzado.
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRoundedRect(9, 11, 24, 21, 6);
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRoundedRect(4, 14, 8, 11, 3);
-  g.fillStyle(COLORS.royalist, 1);
-  g.fillRoundedRect(10.5, 12.5, 21, 18, 5);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillRect(11, 21, 20, 3);
-  g.fillStyle(COLORS.royalistDark, 1);
-  g.fillRect(12, 31, 6, 3);
-  g.fillRect(20, 31, 6, 3);
+  // Sombra en la arena.
+  g.fillStyle(0x000000, 0.16);
+  g.fillEllipse(15, 19, 27, 22);
 
-  // Tricornio con vueltas doradas y rostro.
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRoundedRect(11, 2, 16, 11, 4);
-  g.fillStyle(COLORS.accent, 1);
-  g.fillRect(13, 7, 12, 3);
-  g.fillStyle(COLORS.skin, 1);
-  g.fillEllipse(23, 18, 7, 8);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(25, 16, 2, 2);
+  // Morral a la espalda y casaca azul: hombros con bandolera blanca al frente.
+  g.fillStyle(royalistDark, 1);
+  g.fillRoundedRect(0.5, 14, 7, 8, 2);
+  g.fillStyle(frame, 1);
+  g.fillRoundedRect(5, 9, 14, 18, 5);
+  g.fillStyle(royalist, 1);
+  g.fillRoundedRect(6.5, 10.5, 11, 15, 4);
+  g.fillStyle(trim, 1);
+  g.fillRect(13.5, 10.5, 3, 15);
 
-  // Fusil plantado con bayoneta calada.
-  g.fillStyle(COLORS.hat, 1);
-  g.fillRect(30, 18, 5, 4);
-  g.fillStyle(COLORS.frame, 1);
-  g.fillRect(34, 19, 11, 3);
-  g.fillStyle(COLORS.trim, 1);
-  g.fillTriangle(45, 16.5, 49, 20.5, 45, 23);
+  // Fusil apuntando al este: culata, llave, cañón largo y bayoneta calada.
+  g.fillStyle(hat, 1);
+  g.fillRoundedRect(7, 22.5, 9, 5, 1.5);
+  g.lineStyle(3, frame, 1);
+  g.beginPath();
+  g.moveTo(15.5, 25);
+  g.lineTo(43, 25);
+  g.strokePath();
+  g.fillStyle(trim, 1);
+  g.fillRect(15, 23.5, 3, 3);
+  g.fillTriangle(42, 22.6, 45.5, 25, 42, 27.4);
+
+  // Manos sobre el arma y rostro asomando.
+  g.fillStyle(skin, 1);
+  g.fillCircle(14, 25, 2.1);
+  g.fillCircle(20.5, 24.4, 2);
+  g.fillEllipse(22, 17, 5, 6.5);
+
+  // Tricornio desde arriba con vuelta dorada al frente.
+  g.fillStyle(hat, 1);
+  g.fillEllipse(15.5, 17, 13, 10);
+  g.fillStyle(accent, 1);
+  g.fillRect(20, 13.8, 2, 6.4);
 
   g.generateTexture("fusilero", 50, 34);
   g.destroy();
@@ -852,7 +910,7 @@ function drawJineteTexture(scene) {
   const g = scene.add.graphics();
 
   // Cola y patas del caballo.
-  g.fillStyle(COLORS.horseDark, 1);
+  g.fillStyle(horseDark, 1);
   g.fillTriangle(15, 25, 2, 21, 4, 35);
   g.fillRect(16, 36, 5, 8);
   g.fillRect(24, 36, 5, 8);
@@ -860,38 +918,38 @@ function drawJineteTexture(scene) {
   g.fillRect(45, 36, 5, 8);
 
   // Cuerpo, cuello y cabeza del caballo, con oreja y ojo.
-  g.fillStyle(COLORS.horse, 1);
+  g.fillStyle(horse, 1);
   g.fillRoundedRect(11, 22, 41, 16, 8);
   g.fillRoundedRect(46, 12, 11, 14, 5);
   g.fillRoundedRect(51, 10, 12, 9, 4);
-  g.fillStyle(COLORS.horseDark, 1);
+  g.fillStyle(horseDark, 1);
   g.fillTriangle(53, 12, 55, 5, 58, 12);
-  g.fillStyle(COLORS.frame, 1);
+  g.fillStyle(frame, 1);
   g.fillRect(58, 13, 2, 2);
 
   // Montura con faja roja.
-  g.fillStyle(COLORS.sash, 1);
+  g.fillStyle(sash, 1);
   g.fillRect(27, 30, 14, 5);
 
   // Jinete: casaca azul, casco con penacho dorado y rostro.
-  g.fillStyle(COLORS.royalist, 1);
+  g.fillStyle(royalist, 1);
   g.fillRoundedRect(28, 7, 13, 14, 3);
-  g.fillStyle(COLORS.trim, 1);
+  g.fillStyle(trim, 1);
   g.fillRect(29, 14, 11, 2);
-  g.fillStyle(COLORS.royalistDark, 1);
+  g.fillStyle(royalistDark, 1);
   g.fillRoundedRect(27, 2, 13, 7, 3);
-  g.fillStyle(COLORS.accent, 1);
+  g.fillStyle(accent, 1);
   g.fillRect(27, 5, 13, 2);
-  g.fillStyle(COLORS.skin, 1);
+  g.fillStyle(skin, 1);
   g.fillCircle(40, 9, 2.5);
 
   // Lanza de embestida con punta blanca.
-  g.lineStyle(2, COLORS.frame, 1);
+  g.lineStyle(2, frame, 1);
   g.beginPath();
   g.moveTo(31, 18);
   g.lineTo(58, 6);
   g.strokePath();
-  g.fillStyle(COLORS.trim, 1);
+  g.fillStyle(trim, 1);
   g.fillTriangle(57, 3, 57, 9, 61, 6);
 
   g.generateTexture("jinete", 64, 44);
@@ -900,11 +958,11 @@ function drawJineteTexture(scene) {
 
 function createMusketBalls(scene) {
   const g = scene.add.graphics();
-  g.fillStyle(COLORS.stoneDark, 1);
+  g.fillStyle(stoneDark, 1);
   g.fillCircle(9, 9, 7);
-  g.fillStyle(COLORS.stone, 1);
+  g.fillStyle(stone, 1);
   g.fillCircle(7.5, 7.5, 4.5);
-  g.fillStyle(COLORS.stoneLight, 1);
+  g.fillStyle(stoneLight, 1);
   g.fillCircle(6, 6, 2);
   g.generateTexture("balaFusil", 18, 18);
   g.destroy();
@@ -1084,7 +1142,7 @@ function updateFusilero(scene, fusilero, direction, time, speedScale) {
   fusilero.nextShotAt = shot.nextShotAt;
 
   if (shot.aimUntil > 0) {
-    fusilero.setTint(COLORS.accent);
+    fusilero.setTint(accent);
   } else if (wasAiming) {
     fusilero.clearTint();
   }
@@ -1677,7 +1735,7 @@ function createHearts(scene) {
   const g = scene.add.graphics();
   const drawHeart = (color) => {
     g.clear();
-    g.fillStyle(COLORS.frame, 1);
+    g.fillStyle(frame, 1);
     g.fillCircle(5, 5, 5.2);
     g.fillCircle(12, 5, 5.2);
     g.fillTriangle(0.4, 6, 16.6, 6, 8.5, 15.6);
@@ -1685,14 +1743,14 @@ function createHearts(scene) {
     g.fillCircle(5, 5, 3.8);
     g.fillCircle(12, 5, 3.8);
     g.fillTriangle(1.9, 6.5, 15.1, 6.5, 8.5, 13.8);
-    if (color === COLORS.heart) {
+    if (color === heart) {
       g.fillStyle(0xffffff, 0.5);
       g.fillCircle(4, 3.5, 1.4);
     }
   };
-  drawHeart(COLORS.heart);
+  drawHeart(heart);
   g.generateTexture("corazonLleno", 17, 16);
-  drawHeart(COLORS.leather);
+  drawHeart(leather);
   g.generateTexture("corazonVacio", 17, 16);
   g.destroy();
 }
@@ -1704,13 +1762,13 @@ function createHud(scene) {
 
   // Franja de cuero oscuro tras los elementos marcados.
   scene.add
-    .rectangle(GAME_WIDTH / 2, 24, GAME_WIDTH, 48, COLORS.backdrop, 0.62)
+    .rectangle(GAME_WIDTH / 2, 24, GAME_WIDTH, 48, backdrop, 0.62)
     .setDepth(9);
   scene.add
-    .rectangle(GAME_WIDTH / 2, 48, GAME_WIDTH, 2, COLORS.accent, 0.35)
+    .rectangle(GAME_WIDTH / 2, 48, GAME_WIDTH, 2, accent, 0.35)
     .setDepth(9);
 
-  scene.hud.score = pixText(scene, 16, 24, "PUNTOS 0000", 3, COLORS.accent, 0, 0.5).setDepth(10);
+  scene.hud.score = pixText(scene, 16, 24, "PUNTOS 0000", 3, accent, 0, 0.5).setDepth(10);
 
   // Tres corazones: llenos son vidas; vacíos, recuerdan lo perdido.
   scene.hud.hearts = [0, 1, 2].map((i) =>
@@ -1719,25 +1777,43 @@ function createHud(scene) {
       .setDepth(10),
   );
 
-  scene.hud.oleada = pixText(scene, GAME_WIDTH - 16, 24, "OLEADA 01", 3, COLORS.patriota, 1, 0.5).setDepth(10);
+  scene.hud.oleada = pixText(scene, GAME_WIDTH - 16, 24, "OLEADA 01", 3, patriota, 1, 0.5).setDepth(10);
 
-  scene.hud.status = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 16, "", 2, COLORS.patriota).setDepth(10);
+  scene.hud.status = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 16, "", 2, patriota).setDepth(10);
 
-  // Medidor de la Piedra: icono de roca junto a la barra; lista, anuncia
-  // ¡PIEDRA LISTA! parpadeando en su lugar.
-  scene.hud.piedraIcon = scene.add.image(46, 58, "piedra").setScale(PIEDRA_ICON_SCALE).setDepth(10);
+  // Medidor de la Piedra: panel de cuero con rótulo, icono de roca y barra
+  // segmentada; lista, ¡PIEDRA LISTA! parpadea y el panel se rodea de oro vivo.
+  scene.hud.piedraPanel = scene.add
+    .rectangle(118, 62, 216, 40, leather, 0.88)
+    .setStrokeStyle(2, frame, 1)
+    .setDepth(9);
+  scene.hud.piedraGlow = scene.add
+    .rectangle(118, 62, 220, 44)
+    .setStrokeStyle(3, accent)
+    .setDepth(9)
+    .setVisible(false);
+  scene.hud.piedraIcon = scene.add.image(30, 62, "piedra").setScale(PIEDRA_ICON_SCALE).setDepth(10);
+  scene.hud.piedraLabel = pixText(scene, 54, 50, "PIEDRA", 2, dim, 0, 0.5).setDepth(10);
   scene.hud.piedraBarBg = scene.add
-    .rectangle(66 + PIEDRA_BAR / 2, 58, PIEDRA_BAR + 8, 12, COLORS.cell, 0.9)
-    .setStrokeStyle(2, COLORS.frame, 1)
+    .rectangle(133, 66, PIEDRA_BAR + 8, 14, cell, 1)
+    .setStrokeStyle(2, frame, 1)
     .setDepth(10);
   scene.hud.piedraFill = scene.add
-    .rectangle(68, 58, PIEDRA_BAR, 7, COLORS.accent)
+    .rectangle(56, 66, PIEDRA_BAR, 9, accent)
     .setOrigin(0, 0.5)
     .setDepth(10);
+  scene.hud.piedraTicks = [0.25, 0.5, 0.75].map((mark) =>
+    scene.add
+      .rectangle(56 + PIEDRA_BAR * mark, 66, 1.5, 9, frame, 0.65)
+      .setDepth(10),
+  );
 
-  scene.hud.piedraReady = pixText(scene, 66, 58, "¡PIEDRA LISTA!", 2, COLORS.accent, 0, 0.5)
+  scene.hud.piedraReady = pixText(scene, 56, 66, "¡PIEDRA LISTA!", 2, accent, 0, 0.5)
     .setDepth(10)
     .setVisible(false);
+  scene.hud.piedraGlowShown = false;
+  // Parpadeo del rótulo listo: un solo latido desde la creación, corre siempre
+  // y solo se ve cuando el medidor lo muestra.
   scene.tweens.add({
     targets: scene.hud.piedraReady,
     alpha: 0.15,
@@ -1758,16 +1834,44 @@ function tickPiedraGauge(scene) {
 }
 
 function updatePiedraHud(scene, tick) {
+  const hud = scene.hud;
   const ready = scene.state.run.piedraBank > 0;
   const fill = Math.max(0, Math.min(1, tick.progress / PIEDRA_STEP));
-  scene.hud.piedraBarBg.setVisible(!ready);
-  scene.hud.piedraFill.setVisible(!ready);
-  scene.hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 2), 7);
-  scene.hud.piedraReady.setVisible(ready);
+  hud.piedraBarBg.setVisible(!ready);
+  hud.piedraFill.setVisible(!ready);
+  hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 2), 9);
+  hud.piedraReady.setVisible(ready);
+  // Los adornos del medidor nacen en createHud; el afino aquí los respeta
+  // cuando están (paneles, rótulo y marco de oro latiendo al quedar lista).
+  if (hud.piedraTicks) {
+    for (const mark of hud.piedraTicks) {
+      mark.setVisible(!ready);
+    }
+  }
+  if (hud.piedraLabel) {
+    hud.piedraLabel.setTint(ready ? accent : dim);
+  }
+  if (hud.piedraGlow) {
+    hud.piedraGlow.setVisible(ready);
+    if (ready !== hud.piedraGlowShown) {
+      hud.piedraGlowShown = ready;
+      scene.tweens.killTweensOf(hud.piedraGlow);
+      if (ready) {
+        hud.piedraGlow.setAlpha(1);
+        scene.tweens.add({
+          targets: hud.piedraGlow,
+          alpha: 0.2,
+          duration: 300,
+          yoyo: true,
+          repeat: -1,
+        });
+      }
+    }
+  }
   if (tick.granted) {
-    scene.tweens.killTweensOf(scene.hud.piedraIcon);
+    scene.tweens.killTweensOf(hud.piedraIcon);
     scene.tweens.add({
-      targets: scene.hud.piedraIcon,
+      targets: hud.piedraIcon,
       scale: { from: PIEDRA_ICON_POP, to: PIEDRA_ICON_SCALE },
       duration: 220,
       ease: "Bounce.easeOut",
@@ -1810,8 +1914,8 @@ function refreshHud(scene) {
 
 function showOleadaSplash(scene, oleada) {
   const text = `¡OLEADA ${oleada}!`;
-  const shadow = pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 57, text, 6, COLORS.frame).setDepth(29);
-  const splash = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, text, 6, COLORS.accent).setDepth(30);
+  const shadow = pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 57, text, 6, frame).setDepth(29);
+  const splash = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, text, 6, accent).setDepth(30);
 
   scene.tweens.add({
     targets: [splash, shadow],
@@ -1873,7 +1977,7 @@ function startRun(scene) {
   refreshHud(scene);
   setPixText(
     scene.hud.status,
-    "BOTÓN 1: DISPARAR   BOTÓN 2: SABLE   BOTÓN 3: PIEDRA   START: PAUSA",
+    "B1: DISPARAR  B2: SABLE  B3: PIEDRA  START: PAUSA",
   );
   scene.state.phase = "playing";
   scene.physics.resume();
@@ -2067,22 +2171,23 @@ function createStartScreen(scene) {
       GAME_HEIGHT / 2,
       GAME_WIDTH,
       GAME_HEIGHT,
-      COLORS.overlay,
+      overlay,
       0.96,
     ),
   );
 
-  c.add(pixText(scene, GAME_WIDTH / 2, 44, "PLATANUS HACK 26 · EDICIÓN CARACAS", 2, COLORS.dim));
+  c.add(pixText(scene, GAME_WIDTH / 2, 44, "PLATANUS HACK 26 · EDICIÓN CARACAS", 2, dim));
 
-  const marqueeTop = pixText(scene, GAME_WIDTH / 2, 96, "BATALLA DE", 5, COLORS.patriota);
-  c.add(pixText(scene, GAME_WIDTH / 2 + 4, 163, "MATASIETE", 7, COLORS.frame));
-  const marqueeBottom = pixText(scene, GAME_WIDTH / 2, 160, "MATASIETE", 7, COLORS.accent);
+  const marqueeTop = pixText(scene, GAME_WIDTH / 2, 96, "BATALLA DE", 5, patriota);
+  c.add(pixText(scene, GAME_WIDTH / 2 + 4, 163, "MATASIETE", 7, frame));
+  const marqueeBottom = pixText(scene, GAME_WIDTH / 2, 160, "MATASIETE", 7, accent);
   c.add(marqueeTop);
   c.add(marqueeBottom);
   scene.tweens.add({
     targets: [marqueeTop, marqueeBottom],
-    scale: 1.03,
-    alpha: 0.88,
+    // Pulso de brillo sin escala: escalar el tipo de píxel por fracciones
+    // desalinea los píxeles y los emborrona; la luz basta para que respire.
+    alpha: 0.72,
     duration: 1100,
     yoyo: true,
     repeat: -1,
@@ -2098,12 +2203,12 @@ function createStartScreen(scene) {
     300,
   );
 
-  c.add(pixText(scene, GAME_WIDTH / 2, 400, "MEJORES PUNTUAJES", 3, COLORS.accent));
-  scene.startScreen.leaderboard = pixText(scene, GAME_WIDTH / 2, 424, "", 2, COLORS.patriota, 0.5, 0);
+  c.add(pixText(scene, GAME_WIDTH / 2, 400, "MEJORES PUNTUAJES", 3, accent));
+  scene.startScreen.leaderboard = pixText(scene, GAME_WIDTH / 2, 424, "", 2, patriota, 0.5, 0);
   scene.startScreen.leaderboard.lineSpacing = 4;
   c.add(scene.startScreen.leaderboard);
 
-  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 22, "JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR", 2, COLORS.dim));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 22, "JOYSTICK: MOVER   BOTÓN 1 / START: CONFIRMAR", 2, dim));
 
   c.setVisible(false);
 }
@@ -2112,16 +2217,18 @@ function createMenuButtons(scene, container, labels, yStart, yStep, width) {
   const buttons = [];
   for (let i = 0; i < labels.length; i += 1) {
     const y = yStart + i * yStep;
+    const label = pixText(scene, GAME_WIDTH / 2, y, labels[i], 3, patriota);
+    // La caja se ajusta al rótulo: ningún texto cuelga fuera de su botón.
+    const bgWidth = Math.max(width, Math.ceil(label.width) * 3 + 32);
     const bg = scene.add.rectangle(
       GAME_WIDTH / 2,
       y,
-      width,
+      bgWidth,
       40,
-      COLORS.cell,
+      cell,
       0.95,
     );
-    bg.setStrokeStyle(2, COLORS.frame, 0.8);
-    const label = pixText(scene, GAME_WIDTH / 2, y, labels[i], 3, COLORS.patriota);
+    bg.setStrokeStyle(2, frame, 0.8);
     container.add(bg);
     container.add(label);
     buttons.push({ bg, label });
@@ -2132,9 +2239,9 @@ function createMenuButtons(scene, container, labels, yStart, yStep, width) {
 function updateMenuHighlight(buttons, cursor) {
   buttons.forEach(({ bg, label }, i) => {
     const active = i === cursor;
-    bg.setFillStyle(active ? COLORS.accent : COLORS.cell, active ? 1 : 0.95);
-    bg.setStrokeStyle(2, active ? COLORS.sand : COLORS.frame, active ? 1 : 0.8);
-    label.setTint(active ? COLORS.cell : COLORS.patriota);
+    bg.setFillStyle(active ? accent : cell, active ? 1 : 0.95);
+    bg.setStrokeStyle(2, active ? sand : frame, active ? 1 : 0.8);
+    label.setTint(active ? cell : patriota);
   });
 }
 
@@ -2197,17 +2304,17 @@ function createLeaderboardScreen(scene) {
       GAME_HEIGHT / 2,
       GAME_WIDTH,
       GAME_HEIGHT,
-      COLORS.overlay,
+      overlay,
       0.98,
     ),
   );
-  c.add(pixText(scene, GAME_WIDTH / 2, 88, "MEJORES PUNTUAJES", 4, COLORS.accent));
+  c.add(pixText(scene, GAME_WIDTH / 2, 88, "MEJORES PUNTUAJES", 4, accent));
 
-  scene.leaderScreen.list = pixText(scene, GAME_WIDTH / 2, 160, "", 3, COLORS.patriota, 0.5, 0);
+  scene.leaderScreen.list = pixText(scene, GAME_WIDTH / 2, 160, "", 3, patriota, 0.5, 0);
   scene.leaderScreen.list.lineSpacing = 14;
   c.add(scene.leaderScreen.list);
 
-  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, COLORS.dim));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, dim));
 
   c.setVisible(false);
 }
@@ -2231,11 +2338,11 @@ function createControlsScreen(scene) {
       GAME_HEIGHT / 2,
       GAME_WIDTH,
       GAME_HEIGHT,
-      COLORS.overlay,
+      overlay,
       0.98,
     ),
   );
-  c.add(pixText(scene, GAME_WIDTH / 2, 96, "¿CONTROLES?", 4, COLORS.accent));
+  c.add(pixText(scene, GAME_WIDTH / 2, 96, "¿CONTROLES?", 4, accent));
 
   const lines = [
     "JOYSTICK ....... MOVER · ELEGIR",
@@ -2260,11 +2367,11 @@ function createControlsScreen(scene) {
       lineY += 10;
       continue;
     }
-    c.add(pixText(scene, GAME_WIDTH / 2, lineY, line, 2, COLORS.patriota));
+    c.add(pixText(scene, GAME_WIDTH / 2, lineY, line, 2, patriota));
     lineY += 24;
   }
 
-  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, COLORS.dim));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 28, "PULSA START PARA VOLVER", 2, dim));
 
   c.setVisible(false);
 }
@@ -2320,12 +2427,12 @@ function createPauseScreen(scene) {
       GAME_HEIGHT / 2,
       GAME_WIDTH,
       GAME_HEIGHT,
-      COLORS.overlay,
+      overlay,
       0.85,
     ),
   );
-  c.add(pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 97, "PAUSA", 7, COLORS.frame));
-  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, "PAUSA", 7, COLORS.accent));
+  c.add(pixText(scene, GAME_WIDTH / 2 + 3, GAME_HEIGHT / 2 - 97, "PAUSA", 7, frame));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, "PAUSA", 7, accent));
 
   scene.pauseScreen.buttons = createMenuButtons(
     scene,
@@ -2336,7 +2443,7 @@ function createPauseScreen(scene) {
     280,
   );
 
-  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, "JOYSTICK: ELEGIR   START: CONFIRMAR", 2, COLORS.dim));
+  c.add(pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, "JOYSTICK: ELEGIR   START: CONFIRMAR", 2, dim));
 
   c.setVisible(false);
 }
@@ -2372,28 +2479,28 @@ function createEndGameUi(scene) {
       GAME_HEIGHT / 2,
       GAME_WIDTH,
       GAME_HEIGHT,
-      COLORS.backdrop,
+      backdrop,
       0.98,
     ),
   );
 
-  c.add(pixText(scene, GAME_WIDTH / 2 + 3, 67, "¡DERROTA!", 6, COLORS.frame));
-  scene.endGame.title = pixText(scene, GAME_WIDTH / 2, 64, "¡DERROTA!", 6, COLORS.sash);
+  c.add(pixText(scene, GAME_WIDTH / 2 + 3, 67, "¡DERROTA!", 6, frame));
+  scene.endGame.title = pixText(scene, GAME_WIDTH / 2, 64, "¡DERROTA!", 6, sash);
 
-  scene.endGame.rally = pixText(scene, GAME_WIDTH / 2, 116, "", 3, COLORS.accent);
+  scene.endGame.rally = pixText(scene, GAME_WIDTH / 2, 116, "", 3, accent);
 
-  scene.endGame.summary = pixText(scene, GAME_WIDTH / 2, 150, "", 3, COLORS.patriota);
+  scene.endGame.summary = pixText(scene, GAME_WIDTH / 2, 150, "", 3, patriota);
 
-  scene.endGame.nameLabel = pixText(scene, GAME_WIDTH / 2, 186, "INICIALES", 2, COLORS.dim);
+  scene.endGame.nameLabel = pixText(scene, GAME_WIDTH / 2, 186, "INICIALES", 2, dim);
 
-  scene.endGame.nameValue = pixText(scene, GAME_WIDTH / 2, 224, "___", 5, COLORS.accent);
+  scene.endGame.nameValue = pixText(scene, GAME_WIDTH / 2, 224, "___", 5, accent);
   scene.endGame.nameValue.setLetterSpacing(10);
 
-  scene.endGame.instructions = pixText(scene, GAME_WIDTH / 2, 258, "MOVER: ELEGIR   BOTÓN 1: CONFIRMAR", 2, COLORS.dim);
+  scene.endGame.instructions = pixText(scene, GAME_WIDTH / 2, 258, "MOVER: ELEGIR   BOTÓN 1: CONFIRMAR", 2, dim);
 
-  scene.endGame.leaderboardTitle = pixText(scene, GAME_WIDTH / 2, 288, "MEJORES PUNTUAJES", 3, COLORS.accent);
+  scene.endGame.leaderboardTitle = pixText(scene, GAME_WIDTH / 2, 288, "MEJORES PUNTUAJES", 3, accent);
 
-  scene.endGame.leaderboard = pixText(scene, GAME_WIDTH / 2, 308, "", 2, COLORS.patriota, 0.5, 0);
+  scene.endGame.leaderboard = pixText(scene, GAME_WIDTH / 2, 308, "", 2, patriota, 0.5, 0);
   scene.endGame.leaderboard.lineSpacing = 4;
 
   scene.endGame.gridLabels = [];
@@ -2406,15 +2513,15 @@ function createEndGameUi(scene) {
       const cellY = 412 + row * 30;
       const wide = value.length > 1;
 
-      const cell = scene.add.rectangle(
+      const slate = scene.add.rectangle(
         cellX,
         cellY,
         wide ? 96 : 42,
         26,
-        COLORS.cell,
+        cell,
         0.95,
       );
-      cell.setStrokeStyle(2, COLORS.frame, 0.8);
+      slate.setStrokeStyle(2, frame, 0.8);
 
       const label = pixText(
         scene,
@@ -2422,16 +2529,16 @@ function createEndGameUi(scene) {
         cellY,
         value,
         wide ? 2 : 3,
-        COLORS.patriota,
+        patriota,
       );
 
-      scene.endGame.gridLabels.push({ cell, label, row, col, value });
-      c.add(cell);
+      scene.endGame.gridLabels.push({ cell: slate, label, row, col, value });
+      c.add(slate);
       c.add(label);
     }
   }
 
-  scene.endGame.saveStatus = pixText(scene, GAME_WIDTH / 2, 584, "", 2, COLORS.accent);
+  scene.endGame.saveStatus = pixText(scene, GAME_WIDTH / 2, 584, "", 2, accent);
 
   c.add(scene.endGame.title);
   c.add(scene.endGame.rally);
@@ -2500,15 +2607,15 @@ function updateLetterGridHighlight(scene) {
   for (const item of scene.endGame.gridLabels) {
     const active = item.row === entry.row && item.col === entry.col;
     item.cell.setFillStyle(
-      active ? COLORS.accent : COLORS.cell,
+      active ? accent : cell,
       active ? 1 : 0.95,
     );
     item.cell.setStrokeStyle(
       2,
-      active ? COLORS.sand : COLORS.frame,
+      active ? sand : frame,
       active ? 1 : 0.8,
     );
-    item.label.setTint(active ? COLORS.cell : COLORS.patriota);
+    item.label.setTint(active ? cell : patriota);
   }
 }
 
