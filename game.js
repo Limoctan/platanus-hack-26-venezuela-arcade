@@ -11,6 +11,8 @@ const FIRE_INTERVAL = 200;
 const SABLE_COOLDOWN = 400;
 const SABLE_RANGE = 60;
 const SABLE_HALF_ARC = Math.PI / 4;
+// El tajo sigue activo mientras se ve el barrido, no solo en el primer frame.
+const SABLE_ACTIVE_MS = 200;
 const BULLET_SPEED = 460;
 const BULLET_MARGIN = 12;
 const LANCERO_SPEED = 64;
@@ -602,37 +604,93 @@ function createBullets(scene) {
 }
 
 function createSable(scene) {
+  // Estela: una franja curva que marca el barrido, no un cono relleno.
+  const t = scene.add.graphics();
+  t.lineStyle(12, trim, 0.32);
+  t.beginPath();
+  t.arc(64, 64, 54, -SABLE_HALF_ARC, SABLE_HALF_ARC);
+  t.strokePath();
+  t.lineStyle(2, 0xffffff, 0.55);
+  t.beginPath();
+  t.arc(64, 64, 60, -SABLE_HALF_ARC, SABLE_HALF_ARC);
+  t.strokePath();
+  t.generateTexture("arco", 128, 128);
+  t.destroy();
+
+  // Sable: hoja curva con filo, guarnición dorada, empuñadura y pomo.
   const g = scene.add.graphics();
-  const c = 64;
-  g.fillStyle(frame, 0.85);
-  g.slice(c, c, c, -Math.PI / 4, Math.PI / 4, false);
+  g.fillStyle(trim, 1);
+  g.lineStyle(2, frame, 1);
+  g.beginPath();
+  g.moveTo(32, 57);
+  g.lineTo(56, 55);
+  g.lineTo(78, 50);
+  g.lineTo(92, 43);
+  g.lineTo(92, 48);
+  g.lineTo(80, 55);
+  g.lineTo(58, 61);
+  g.lineTo(32, 71);
+  g.closePath();
   g.fillPath();
-  g.fillStyle(trim, 0.7);
-  g.slice(c, c, c - 12, -Math.PI / 4, Math.PI / 4, false);
-  g.fillPath();
-  g.fillStyle(accent, 0.9);
-  g.slice(c, c, c - 30, -Math.PI / 4, Math.PI / 4, false);
-  g.fillPath();
-  g.generateTexture("arco", 2 * c, 2 * c);
+  g.strokePath();
+  g.lineStyle(1.5, 0xffffff, 0.9);
+  g.beginPath();
+  g.moveTo(38, 58);
+  g.lineTo(66, 53);
+  g.lineTo(88, 46);
+  g.strokePath();
+  g.fillStyle(accent, 1);
+  g.fillRoundedRect(24, 44, 9, 40, 4);
+  g.fillStyle(leather, 1);
+  g.fillRoundedRect(11, 58, 15, 12, 5);
+  g.lineStyle(2, accent, 1);
+  g.beginPath();
+  g.moveTo(12, 69);
+  g.lineTo(24, 80);
+  g.lineTo(30, 68);
+  g.strokePath();
+  g.fillStyle(accent, 1);
+  g.fillCircle(10, 64, 5);
+  g.fillStyle(trim, 0.85);
+  g.fillCircle(8, 62, 1.6);
+  g.generateTexture("filo", 128, 128);
   g.destroy();
 
-  scene.sableArc = scene.add
-    .image(scene.patriota.x, scene.patriota.y, "arco")
+  const blade = scene.add.image(0, 0, "filo").setOrigin(0.25, 0.5);
+  const arc = scene.add
+    .container(scene.patriota.x, scene.patriota.y, [
+      scene.add.image(0, 0, "arco"),
+      blade,
+    ])
     .setDepth(7)
     .setVisible(false);
+  arc.blade = blade;
+  scene.sableArc = arc;
 }
 
 function swingSable(scene, facing) {
   const arc = scene.sableArc;
-  arc.setPosition(scene.patriota.x, scene.patriota.y);
-  arc.setRotation(facingRotation(facing));
-  arc.setAlpha(1).setScale(0.75).setVisible(true);
+  const blade = arc.blade;
+  arc
+    .setPosition(scene.patriota.x, scene.patriota.y)
+    .setRotation(facingRotation(facing))
+    .setAlpha(1)
+    .setScale(0.95)
+    .setVisible(true);
+  blade.setRotation(-SABLE_HALF_ARC);
+  scene.tweens.killTweensOf(blade);
   scene.tweens.add({
     targets: arc,
-    scale: 1.15,
+    scale: 1,
     alpha: 0,
-    duration: 160,
+    duration: SABLE_ACTIVE_MS,
     onComplete: () => arc.setVisible(false),
+  });
+  scene.tweens.add({
+    targets: blade,
+    rotation: SABLE_HALF_ARC,
+    duration: SABLE_ACTIVE_MS,
+    ease: "Cubic.easeOut",
   });
 }
 
@@ -1286,9 +1344,15 @@ function updatePatriota(scene, time) {
   const swing = swingTick(isSwinging(scene.controls), time, run.nextSwingAt);
   run.nextSwingAt = swing.nextSwingAt;
   if (swing.swing) {
+    run.sableUntil = time + SABLE_ACTIVE_MS;
+    run.sableFacing = run.facing;
     swingSable(scene, run.facing);
-    resolveSableHits(scene, run.facing);
     playSound(scene, "sable");
+  }
+  // El tajo se resuelve en cada frame de su ventana activa: así alcanza a quien
+  // entra en el arco durante el barrido, no solo a quien ya estaba al empezar.
+  if (time < run.sableUntil) {
+    resolveSableHits(scene, run.sableFacing);
   }
 
   if (isThrowingPiedra(scene.controls)) {
@@ -3154,8 +3218,34 @@ function playTitleTheme(scene) {
   startMusic(scene, "title", 1.8);
 }
 
+// [onda, duración, volumen, ...pasos [frecuencia, instante, rampa?]]
+// rampa: 1 exponencial, 2 lineal; sin rampa, la nota se mantiene.
+// onda: 0 cuadrada, 1 triangular, 2 diente de sierra.
+const SFX = {
+  click: [0, 0.05, 0.08, [1200, 0], [600, 0.04, 1]],
+  select: [0, 0.1, 0.12, [700, 0], [1400, 0.08, 1]],
+  oleada: [0, 0.34, 0.14, [523, 0], [659, 0.09], [784, 0.18]],
+  bonus: [1, 0.3, 0.14, [784, 0], [988, 0.08], [1175, 0.16]],
+  shot: [0, 0.09, 0.09, [920, 0], [160, 0.07, 1]],
+  aim: [0, 0.32, 0.05, [280, 0], [840, 0.3, 1]],
+  musket: [2, 0.22, 0.2, [240, 0], [55, 0.2, 1]],
+  deflect: [0, 0.1, 0.09, [1500, 0], [2600, 0.08, 1]],
+  sable: [1, 0.15, 0.12, [1500, 0], [280, 0.13, 1]],
+  hit: [0, 0.06, 0.07, [500, 0], [220, 0.05, 1]],
+  kill: [1, 0.18, 0.14, [300, 0], [60, 0.16, 1]],
+  hurt: [2, 0.24, 0.16, [440, 0], [90, 0.22, 1]],
+  piedraThrow: [2, 0.3, 0.22, [320, 0], [70, 0.28, 2]],
+  crush: [0, 0.16, 0.2, [180, 0], [45, 0.14, 1]],
+  listo: [0, 0.34, 0.12, [660, 0], [880, 0.1], [1100, 0.2]],
+  defeat: [2, 1, 0.2, [440, 0], [349, 0.16], [293, 0.32], [220, 0.48], [60, 0.95, 1]],
+};
+
 function playSound(scene, type) {
   try {
+    const sound = SFX[type];
+    if (!sound) {
+      return;
+    }
     const ctx =
       scene.sound && scene.sound.context
         ? scene.sound.context
@@ -3164,134 +3254,23 @@ function playSound(scene, type) {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     const now = ctx.currentTime;
-    let end = 0;
-    if (type === "click") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(1200, now);
-      osc.frequency.exponentialRampToValueAtTime(600, now + 0.04);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      end = 0.05;
-    } else if (type === "select") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(700, now);
-      osc.frequency.exponentialRampToValueAtTime(1400, now + 0.08);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      end = 0.1;
-    } else if (type === "oleada") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(523, now);
-      osc.frequency.setValueAtTime(659, now + 0.09);
-      osc.frequency.setValueAtTime(784, now + 0.18);
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
-      end = 0.34;
-    } else if (type === "bonus") {
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(784, now);
-      osc.frequency.setValueAtTime(988, now + 0.08);
-      osc.frequency.setValueAtTime(1175, now + 0.16);
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      end = 0.3;
-    } else if (type === "shot") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(920, now);
-      osc.frequency.exponentialRampToValueAtTime(160, now + 0.07);
-      gain.gain.setValueAtTime(0.09, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-      end = 0.09;
-    } else if (type === "aim") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(280, now);
-      osc.frequency.exponentialRampToValueAtTime(840, now + 0.3);
-      gain.gain.setValueAtTime(0.05, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-      end = 0.32;
-    } else if (type === "musket") {
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(240, now);
-      osc.frequency.exponentialRampToValueAtTime(55, now + 0.2);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-      end = 0.22;
-    } else if (type === "deflect") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(1500, now);
-      osc.frequency.exponentialRampToValueAtTime(2600, now + 0.08);
-      gain.gain.setValueAtTime(0.09, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      end = 0.1;
-    } else if (type === "sable") {
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(1500, now);
-      osc.frequency.exponentialRampToValueAtTime(280, now + 0.13);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      end = 0.15;
-    } else if (type === "hit") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(500, now);
-      osc.frequency.exponentialRampToValueAtTime(220, now + 0.05);
-      gain.gain.setValueAtTime(0.07, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-      end = 0.06;
-    } else if (type === "kill") {
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(60, now + 0.16);
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      end = 0.18;
-    } else if (type === "hurt") {
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
-      gain.gain.setValueAtTime(0.16, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-      end = 0.24;
-    } else if (type === "piedraThrow") {
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(320, now);
-      osc.frequency.linearRampToValueAtTime(70, now + 0.28);
-      gain.gain.setValueAtTime(0.22, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      end = 0.3;
-    } else if (type === "crush") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.exponentialRampToValueAtTime(45, now + 0.14);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-      end = 0.16;
-    } else if (type === "listo") {
-      osc.type = "square";
-      osc.frequency.setValueAtTime(660, now);
-      osc.frequency.setValueAtTime(880, now + 0.1);
-      osc.frequency.setValueAtTime(1100, now + 0.2);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
-      end = 0.34;
-    } else if (type === "defeat") {
-      // Pito de corneta que se rinde: A → F → D → A y caída final.
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.setValueAtTime(349, now + 0.16);
-      osc.frequency.setValueAtTime(293, now + 0.32);
-      osc.frequency.setValueAtTime(220, now + 0.48);
-      osc.frequency.exponentialRampToValueAtTime(60, now + 0.95);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.setValueAtTime(0.16, now + 0.6);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-      end = 1.05;
+    const [wave, end, volume, ...steps] = sound;
+    osc.type = ["square", "triangle", "sawtooth"][wave];
+    for (const [frequency, at, ramp] of steps) {
+      const time = now + at;
+      if (ramp === 1) {
+        osc.frequency.exponentialRampToValueAtTime(frequency, time);
+      } else if (ramp === 2) {
+        osc.frequency.linearRampToValueAtTime(frequency, time);
+      } else {
+        osc.frequency.setValueAtTime(frequency, time);
+      }
     }
-    if (end > 0) {
-      osc.start(now);
-      osc.stop(now + end);
-      osc.onended = () => gain.disconnect();
-    }
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + end);
+    osc.start(now);
+    osc.stop(now + end);
+    osc.onended = () => gain.disconnect();
   } catch (_) {}
 }
