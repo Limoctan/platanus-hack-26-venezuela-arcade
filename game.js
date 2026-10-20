@@ -1,20 +1,4 @@
 // Platanus Hack 26 — Batalla de Matasiete
-// Un patriota defiende la isla de Margarita contra los españoles: Lanceros
-// que avanzan de frente, Fusileros que plantan su fusil a media distancia y
-// Jinetes que embisten por los costados a todo galope.
-// Flujo completo (título → partida → pausa → derrota → iniciales → mejores
-// puntuaciones), combate en cuatro bordes, oleadas discretas con bonus,
-// 3 vidas e invulnerabilidad breve. Las iniciales solo se piden cuando la
-// puntuación entra en la tabla; la derrota arenga a volver a la carga.
-// Chiptune procedural con Web Audio: fanfarria y tema en el título, marcha en
-// bucle durante el combate (batería incluida) y un golpe de derrota con la
-// pista detenida. Sin archivos: todo se programa nota por nota en tiempo real.
-// Presentación: soldados vistos desde arriba (bicorne en bata, casco con
-// cresta, tricornio y fusil enbanderado) que giran sobre sus botas al cambiar
-// de rumbo, tipografía arcade de píxel con filtrado NEAREST (nítida a cualquier
-// escala) y HUD de cuero: panel con rótulo para el medidor de la Piedra, barra
-// segmentada y aviso ¡PIEDRA LISTA! en oro palpitante.
-
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
 const STORAGE_KEY = "batalla-matasiete-highscores";
@@ -47,8 +31,6 @@ const JINETE_SCORE = 150;
 const JINETE_FROM_OLEADA = 3;
 const JINETE_DASH_SPEED = 320;
 const JINETE_DASH_MS = 450;
-// Tras tocar al Patriota el caballo no se queda encima: la embestida pasa de
-// largo o el caballo se empina un instante, dando aire durante la invulnerabilidad.
 const JINETE_STUN_MS = 700;
 const JINETE_EDGES = [1, 3];
 const PIEDRA_STEP = 1500;
@@ -124,8 +106,6 @@ const COLORS = {
   dim: 0x8a7a50,
 };
 
-// Paleta plana: las marcas de COLOR se desglosan en nombres cortos para que el
-// código siga leyéndose igual y el minificado pese la mitad.
 const {
   sand,
   sandDark,
