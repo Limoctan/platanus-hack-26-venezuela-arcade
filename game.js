@@ -55,7 +55,7 @@ const PIEDRA_STEP = 1500;
 const PIEDRA_SPEED = 300;
 const PIEDRA_HIT_RANGE = 44;
 const PIEDRA_MARGIN = 24;
-const PIEDRA_BAR = 150;
+const PIEDRA_BAR = 620;
 const PIEDRA_SPIN = 0.18;
 const PIEDRA_ICON_SCALE = 0.5;
 const PIEDRA_ICON_POP = 0.72;
@@ -105,6 +105,8 @@ const COLORS = {
   mountainDark: 0x584b34,
   frame: 0x3a3020,
   accent: 0xf2c14e,
+  teal: 0x3fd0c0,
+  tealDark: 0x1f8f87,
   cell: 0x2a2214,
   overlay: 0x0d0b07,
   backdrop: 0x060504,
@@ -139,6 +141,8 @@ const {
   mountainDark,
   frame,
   accent,
+  teal,
+  tealDark,
   cell,
   overlay,
   backdrop,
@@ -212,9 +216,8 @@ const config = {
   height: GAME_HEIGHT,
   parent: "game-root",
   backgroundColor: "#cdb276",
-  // Consejo de nitidez: todos los textures con filtrado NEAREST y píxeles
-  // redondeados — la fuente de píxel y los sprites no se emborronan al escalar.
-  pixelArt: true,
+  // La fuente de píxel usa filtrado NEAREST (ver makeFont) y todo se redondea
+  // a píxeles enteros: el texto queda nítido y el fondo conserva su trazo suave.
   roundPixels: true,
   physics: {
     default: "arcade",
@@ -494,69 +497,114 @@ function drawCactus(g, x, y, rng) {
   g.fillRoundedRect(x + 12, armY - 9, 7, 15, 3.5);
 }
 
-function createPatriota(scene) {
-  const g = scene.add.graphics();
-
-  // Sombra en la arena.
+// Los cuatro soldados se dibujan desde arriba y miran al este. El cuerpo es
+// corto y los brazos van al arma, para que se lean como personas y no como
+// máquinas; la rotación del sprite sigue el rumbo de cada uno.
+function soldierShadow(g, x, y, w, h) {
   g.fillStyle(0x000000, 0.16);
-  g.fillEllipse(15, 20, 28, 22);
+  g.fillEllipse(x, y, w, h);
+}
 
-  // Mochila a la espalda: el oeste es atrás para un sprite mirando al este.
-  g.fillStyle(horseDark, 1);
-  g.fillRoundedRect(1, 14, 7, 8, 2);
+function soldierArm(g, x1, y1, x2, y2, coat) {
+  g.lineStyle(5, frame, 1);
+  g.lineBetween(x1, y1, x2, y2);
+  g.lineStyle(3, coat, 1);
+  g.lineBetween(x1, y1, x2, y2);
+}
 
-  // Casaca blanca: hombros de lado a lado, faja roja sobre el hombro.
+function soldierHand(g, x, y) {
   g.fillStyle(frame, 1);
-  g.fillRoundedRect(6, 9, 14, 18, 5);
-  g.fillStyle(patriota, 1);
-  g.fillRoundedRect(7.5, 10.5, 11, 15, 4);
-  g.fillStyle(sash, 1);
-  g.fillRect(13, 10.5, 3, 15);
-
-  // Fusil enbanderado apuntando al este: culata, guardamanos, cañón y bayoneta.
-  g.fillStyle(hat, 1);
-  g.fillRoundedRect(8.5, 22.5, 8.5, 5, 1.5);
-  g.lineStyle(3, frame, 1);
-  g.beginPath();
-  g.moveTo(16.5, 25);
-  g.lineTo(32, 25);
-  g.strokePath();
-  g.fillStyle(trim, 1);
-  g.fillRect(16.5, 23.6, 3, 3);
-  g.fillTriangle(31, 22.6, 34.5, 25, 31, 27.4);
-
-  // Brazo doblado hacia la culata y ambas manos sobre el arma.
-  g.fillStyle(patriota, 1);
-  g.fillRoundedRect(8, 20.5, 8, 4.5, 2);
+  g.fillCircle(x, y, 3);
   g.fillStyle(skin, 1);
-  g.fillCircle(14.5, 25, 2.1);
-  g.fillCircle(20, 24.4, 2);
+  g.fillCircle(x, y, 2.2);
+}
 
-  // Rostro asomando y bicorne en bata (de frente atrás) con vivo dorado y
-  // escarapela roja: desde arriba se ve el sombrero caminando por la arena.
+function soldierBody(g, cx, cy, coat) {
+  g.fillStyle(frame, 1);
+  g.fillRoundedRect(cx - 12, cy - 11, 22, 22, 8);
+  g.fillStyle(coat, 1);
+  g.fillRoundedRect(cx - 10, cy - 9, 18, 18, 6);
+}
+
+// El rostro asoma por delante del sombrero: así se entiende hacia dónde mira.
+function soldierFace(g, x, y) {
   g.fillStyle(skin, 1);
-  g.fillEllipse(23.5, 17.5, 5, 6.5);
+  g.fillCircle(x + 3, y, 3.2);
+  g.fillStyle(frame, 1);
+  g.fillCircle(x + 4, y - 1, 1.1);
+}
+
+function drawBicorn(g, x, y) {
+  g.fillStyle(frame, 1);
+  g.fillEllipse(x, y, 12, 18);
+  g.fillTriangle(x - 6, y - 6, x + 6, y - 6, x, y - 10);
+  g.fillTriangle(x - 6, y + 6, x + 6, y + 6, x, y + 10);
   g.fillStyle(hat, 1);
-  g.fillEllipse(16.5, 17.5, 15, 10);
+  g.fillEllipse(x - 1, y, 9, 15);
   g.fillStyle(accent, 1);
-  g.fillRect(22, 14, 2, 7);
+  g.fillRect(x - 4, y - 1, 7, 2);
   g.fillStyle(sash, 1);
-  g.fillCircle(12, 17.5, 1.7);
+  g.fillCircle(x + 1, y - 7, 2.2);
+  soldierFace(g, x, y);
+}
 
-  g.generateTexture("patriota", 36, 36);
-  g.destroy();
+function drawTricorn(g, x, y, plume) {
+  g.fillStyle(frame, 1);
+  g.fillCircle(x, y, 9);
+  g.fillTriangle(x - 8, y - 7, x - 8, y + 7, x + 9, y);
+  g.fillStyle(hat, 1);
+  g.fillCircle(x - 1, y, 7);
+  g.fillTriangle(x - 6, y - 5, x - 6, y + 5, x + 7, y);
+  g.lineStyle(1.5, accent, 1);
+  g.strokeCircle(x - 1, y, 7);
+  if (plume) {
+    g.fillStyle(trim, 1);
+    g.fillCircle(x - 6, y - 7, 3);
+  }
+  soldierFace(g, x, y);
+}
 
-  const patriota = scene.add
-    .sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, "patriota")
+function drawMusket(g, cx, cy, len, hands) {
+  const y = cy + 11;
+  g.lineStyle(5, frame, 1);
+  g.lineBetween(cx + 3, y, cx + len, y);
+  g.lineStyle(3, horseDark, 1);
+  g.lineBetween(cx + 4, y, cx + len - 3, y);
+  g.lineStyle(2, trim, 1);
+  g.lineBetween(cx + len - 3, y, cx + len, y);
+  g.fillStyle(trim, 1);
+  g.fillTriangle(cx + len, y - 3.5, cx + len + 3, y, cx + len, y + 3.5);
+  for (const h of hands) soldierHand(g, cx + h, y);
+}
+
+function createPatriota(scene) {
+  for (let f = 0; f < 2; f += 1) {
+    const g = scene.add.graphics();
+    const cx = 23;
+    const cy = 23;
+    soldierShadow(g, cx, cy, 34, 30);
+    soldierBody(g, cx, cy, patriota);
+    g.lineStyle(4, sash, 1);
+    g.lineBetween(cx - 8, cy + 8, cx + 6, cy - 8);
+    soldierArm(g, cx + 2, cy - 8, cx + 10, cy + 11, patriota);
+    soldierArm(g, cx + 2, cy + 8, cx + 16, cy + 11, patriota);
+    drawMusket(g, cx, cy, 18, [10, 16]);
+    drawBicorn(g, cx + 11, cy - 1);
+    g.generateTexture(`patriota${f ? "B" : "A"}`, 46, 46);
+    g.destroy();
+  }
+
+  const hero = scene.add
+    .sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, "patriotaA")
     .setDepth(5);
-  scene.physics.add.existing(patriota);
-  patriota.body.setSize(20, 20);
-  patriota.body.setOffset(8, 8);
-  patriota.body.setAllowGravity(false);
-  patriota.body.setCollideWorldBounds(true);
-  patriota.body.setBounce(0, 0);
-  patriota.setRotation(facingRotation("N"));
-  scene.patriota = patriota;
+  scene.physics.add.existing(hero);
+  hero.body.setSize(20, 20);
+  hero.body.setOffset(13, 13);
+  hero.body.setAllowGravity(false);
+  hero.body.setCollideWorldBounds(true);
+  hero.body.setBounce(0, 0);
+  hero.setRotation(facingRotation("N"));
+  scene.patriota = hero;
 }
 
 function createBullets(scene) {
@@ -817,143 +865,104 @@ function createEspanoles(scene) {
 }
 
 function drawLanceroTexture(scene) {
-  const g = scene.add.graphics();
-
-  // Sombra en la arena.
-  g.fillStyle(0x000000, 0.16);
-  g.fillEllipse(14, 19, 26, 22);
-
-  // Casaca azul real: hombros de lado a lado con bandolera blanca al frente.
-  g.fillStyle(frame, 1);
-  g.fillRoundedRect(4, 9, 14, 18, 5);
-  g.fillStyle(royalist, 1);
-  g.fillRoundedRect(5.5, 10.5, 11, 15, 4);
-  g.fillStyle(trim, 1);
-  g.fillRect(12.5, 10.5, 3, 15);
-
-  // Lanza larga hacia el este: asta, banderín al viento y punta de acero.
-  g.lineStyle(3, frame, 1);
-  g.beginPath();
-  g.moveTo(9, 25);
-  g.lineTo(43, 25);
-  g.strokePath();
-  g.fillStyle(trim, 1);
-  g.fillTriangle(42, 22.8, 45.5, 25, 42, 27.2);
-  g.fillStyle(accent, 1);
-  g.fillTriangle(30, 19, 30, 25, 38, 22);
-
-  // Mano empuñando y rostro asomando bajo el casco.
-  g.fillStyle(skin, 1);
-  g.fillCircle(15, 25, 2.1);
-  g.fillEllipse(21, 17, 5, 6.5);
-
-  // Casco desde arriba con cresta dorada y penacho caído hacia atrás.
-  g.fillStyle(royalistDark, 1);
-  g.fillEllipse(13.5, 17, 13, 9);
-  g.fillStyle(accent, 1);
-  g.fillRect(8.5, 15.8, 10, 2.2);
-  g.fillStyle(trim, 1);
-  g.fillTriangle(4, 15, 8.5, 17, 4, 19);
-
-  g.generateTexture("lancero", 46, 34);
-  g.destroy();
+  for (let f = 0; f < 2; f += 1) {
+    const g = scene.add.graphics();
+    const cx = 27;
+    const cy = 20;
+    soldierShadow(g, cx, cy, 34, 28);
+    soldierBody(g, cx, cy, royalist);
+    g.lineStyle(3, trim, 1);
+    g.lineBetween(cx - 8, cy + 8, cx + 6, cy - 8);
+    soldierArm(g, cx + 2, cy - 7, cx + 10, cy + 11, royalist);
+    soldierArm(g, cx + 2, cy + 7, cx + 18, cy + 11, royalist);
+    const y = cy + 11;
+    g.lineStyle(4, frame, 1);
+    g.lineBetween(cx + 2, y, cx + 23, y);
+    g.lineStyle(2, horse, 1);
+    g.lineBetween(cx + 3, y, cx + 22, y);
+    g.fillStyle(trim, 1);
+    g.fillTriangle(cx + 23, y - 4, cx + 26, y, cx + 23, y + 4);
+    g.fillStyle(sash, 1);
+    g.fillTriangle(cx + 20, y - 1, cx + 24, y - 8, cx + 24, y - 1);
+    soldierHand(g, cx + 10, y);
+    soldierHand(g, cx + 18, y);
+    drawTricorn(g, cx + 11, cy - 1, false);
+    g.generateTexture(`lancero${f ? "B" : "A"}`, 54, 40);
+    g.destroy();
+  }
 }
 
 function drawFusileroTexture(scene) {
-  const g = scene.add.graphics();
-
-  // Sombra en la arena.
-  g.fillStyle(0x000000, 0.16);
-  g.fillEllipse(15, 19, 27, 22);
-
-  // Morral a la espalda y casaca azul: hombros con bandolera blanca al frente.
-  g.fillStyle(royalistDark, 1);
-  g.fillRoundedRect(0.5, 14, 7, 8, 2);
-  g.fillStyle(frame, 1);
-  g.fillRoundedRect(5, 9, 14, 18, 5);
-  g.fillStyle(royalist, 1);
-  g.fillRoundedRect(6.5, 10.5, 11, 15, 4);
-  g.fillStyle(trim, 1);
-  g.fillRect(13.5, 10.5, 3, 15);
-
-  // Fusil apuntando al este: culata, llave, cañón largo y bayoneta calada.
-  g.fillStyle(hat, 1);
-  g.fillRoundedRect(7, 22.5, 9, 5, 1.5);
-  g.lineStyle(3, frame, 1);
-  g.beginPath();
-  g.moveTo(15.5, 25);
-  g.lineTo(43, 25);
-  g.strokePath();
-  g.fillStyle(trim, 1);
-  g.fillRect(15, 23.5, 3, 3);
-  g.fillTriangle(42, 22.6, 45.5, 25, 42, 27.4);
-
-  // Manos sobre el arma y rostro asomando.
-  g.fillStyle(skin, 1);
-  g.fillCircle(14, 25, 2.1);
-  g.fillCircle(20.5, 24.4, 2);
-  g.fillEllipse(22, 17, 5, 6.5);
-
-  // Tricornio desde arriba con vuelta dorada al frente.
-  g.fillStyle(hat, 1);
-  g.fillEllipse(15.5, 17, 13, 10);
-  g.fillStyle(accent, 1);
-  g.fillRect(20, 13.8, 2, 6.4);
-
-  g.generateTexture("fusilero", 50, 34);
-  g.destroy();
+  for (let f = 0; f < 2; f += 1) {
+    const g = scene.add.graphics();
+    const cx = 29;
+    const cy = 21;
+    soldierShadow(g, cx, cy, 34, 28);
+    soldierBody(g, cx, cy, royalist);
+    g.lineStyle(3, trim, 1);
+    g.lineBetween(cx - 8, cy + 8, cx + 6, cy - 8);
+    soldierArm(g, cx + 2, cy - 8, cx + 12, cy + 11, royalist);
+    soldierArm(g, cx + 2, cy + 8, cx + 19, cy + 11, royalist);
+    drawMusket(g, cx, cy, 22, [12, 19]);
+    g.fillStyle(accent, 1);
+    g.fillRect(cx + 15, cy + 8, 2, 6);
+    drawTricorn(g, cx + 11, cy - 1, true);
+    g.generateTexture(`fusilero${f ? "B" : "A"}`, 58, 42);
+    g.destroy();
+  }
 }
 
 // El Jinete va montado a caballo, de perfil y mirando al este como el resto;
 // el sprite entero gira con la dirección de su embestida.
 function drawJineteTexture(scene) {
-  const g = scene.add.graphics();
-
-  // Cola y patas del caballo.
-  g.fillStyle(horseDark, 1);
-  g.fillTriangle(15, 25, 2, 21, 4, 35);
-  g.fillRect(16, 36, 5, 8);
-  g.fillRect(24, 36, 5, 8);
-  g.fillRect(37, 36, 5, 8);
-  g.fillRect(45, 36, 5, 8);
-
-  // Cuerpo, cuello y cabeza del caballo, con oreja y ojo.
-  g.fillStyle(horse, 1);
-  g.fillRoundedRect(11, 22, 41, 16, 8);
-  g.fillRoundedRect(46, 12, 11, 14, 5);
-  g.fillRoundedRect(51, 10, 12, 9, 4);
-  g.fillStyle(horseDark, 1);
-  g.fillTriangle(53, 12, 55, 5, 58, 12);
-  g.fillStyle(frame, 1);
-  g.fillRect(58, 13, 2, 2);
-
-  // Montura con faja roja.
-  g.fillStyle(sash, 1);
-  g.fillRect(27, 30, 14, 5);
-
-  // Jinete: casaca azul, casco con penacho dorado y rostro.
-  g.fillStyle(royalist, 1);
-  g.fillRoundedRect(28, 7, 13, 14, 3);
-  g.fillStyle(trim, 1);
-  g.fillRect(29, 14, 11, 2);
-  g.fillStyle(royalistDark, 1);
-  g.fillRoundedRect(27, 2, 13, 7, 3);
-  g.fillStyle(accent, 1);
-  g.fillRect(27, 5, 13, 2);
-  g.fillStyle(skin, 1);
-  g.fillCircle(40, 9, 2.5);
-
-  // Lanza de embestida con punta blanca.
-  g.lineStyle(2, frame, 1);
-  g.beginPath();
-  g.moveTo(31, 18);
-  g.lineTo(58, 6);
-  g.strokePath();
-  g.fillStyle(trim, 1);
-  g.fillTriangle(57, 3, 57, 9, 61, 6);
-
-  g.generateTexture("jinete", 64, 44);
-  g.destroy();
+  for (let f = 0; f < 2; f += 1) {
+    const g = scene.add.graphics();
+    soldierShadow(g, 36, 44, 52, 6);
+    g.fillStyle(horseDark, 1);
+    g.fillTriangle(17, 28, 2, 24 + f * 3, 5, 39 - f * 3);
+    const legs = f
+      ? [[42, 43, 7, 4], [51, 39, 7, 8], [18, 39, 7, 8], [27, 43, 7, 4]]
+      : [[42, 40, 7, 7], [51, 40, 7, 7], [18, 40, 7, 7], [27, 40, 7, 7]];
+    for (const [x, y, w, h] of legs) {
+      g.fillRect(x, y, w, h);
+    }
+    g.fillStyle(horse, 1);
+    g.fillRoundedRect(12, 25, 46, 18, 9);
+    g.fillRoundedRect(52, 13, 12, 16, 6);
+    g.fillRoundedRect(57, 11, 14, 10, 5);
+    g.fillStyle(horseDark, 1);
+    g.fillTriangle(63, 12, 65, 5, 68, 12);
+    g.fillStyle(sash, 1);
+    g.fillRect(31, 33, 16, 6);
+    const by = f ? -1 : 0;
+    g.fillStyle(royalist, 1);
+    g.fillRoundedRect(32, 8 + by, 15, 17, 4);
+    g.fillStyle(trim, 1);
+    g.fillRect(33, 16 + by, 13, 2);
+    g.fillStyle(royalistDark, 1);
+    g.fillRoundedRect(30, 2 + by, 16, 8, 3);
+    g.fillStyle(accent, 1);
+    g.fillRect(30, 5 + by, 16, 2);
+    g.fillStyle(sash, 1);
+    g.fillCircle(34, 6 + by, 2);
+    g.fillStyle(skin, 1);
+    g.fillCircle(47, 11 + by, 3);
+    g.lineStyle(4, frame, 1);
+    g.lineBetween(42, 16 + by, 48, 16 + by);
+    g.lineStyle(2, royalist, 1);
+    g.lineBetween(42, 16 + by, 48, 16 + by);
+    g.lineStyle(3, frame, 1);
+    g.lineBetween(48, 16 + by, 69, 4 + by);
+    g.lineStyle(1.5, horse, 1);
+    g.lineBetween(49, 15.5 + by, 68, 4.5 + by);
+    g.fillStyle(trim, 1);
+    g.fillTriangle(67, 1.5 + by, 67, 6.5 + by, 71, 4 + by);
+    g.fillStyle(sash, 1);
+    g.fillTriangle(57, 7 + by, 64, 1 + by, 62, 9 + by);
+    soldierHand(g, 48, 16 + by);
+    g.generateTexture(`jinete${f ? "B" : "A"}`, 72, 48);
+    g.destroy();
+  }
 }
 
 function createMusketBalls(scene) {
@@ -975,19 +984,23 @@ function spawnEspanol(scene, kind, spawnIndex, time) {
     spawnEdgeFor(kind, spawnIndex),
     Phaser.Math.RND.frac(),
   );
-  const espanol = scene.espanoles.create(point.x, point.y, kind);
+  const espanol = scene.espanoles.create(point.x, point.y, `${kind}A`);
   espanol.setDepth(4);
   espanol.kind = kind;
+  espanol.walkFrame = 0;
   espanol.hp = hpForKind(kind);
   espanol.facing = facingFromVector(
     towardVector(point.x, point.y, GAME_WIDTH / 2, GAME_HEIGHT / 2),
   );
   if (kind === "jinete") {
     espanol.body.setSize(34, 24);
-    espanol.body.setOffset(15, 10);
+    espanol.body.setOffset(19, 12);
+  } else if (kind === "lancero") {
+    espanol.body.setSize(26, 22);
+    espanol.body.setOffset(14, 9);
   } else {
     espanol.body.setSize(26, 22);
-    espanol.body.setOffset(10, 6);
+    espanol.body.setOffset(16, 10);
   }
   espanol.body.setAllowGravity(false);
   espanol.body.setCollideWorldBounds(false);
@@ -1078,6 +1091,16 @@ function clearEspanoles(scene) {
   clearGroup(scene.espanoles);
 }
 
+// Dos fotogramas de marcha: las botas alternan y, al detenerse, vuelve el
+// fotograma de firme. El guardado de setTexture mantiene vivos los mocks.
+function march(sprite, kind, time, moving) {
+  const frame = moving ? Math.floor(time / 140) % 2 : 0;
+  if (sprite.walkFrame !== frame && sprite.setTexture) {
+    sprite.walkFrame = frame;
+    sprite.setTexture(kind + (frame ? "B" : "A"));
+  }
+}
+
 function updateEspanoles(scene, time) {
   const target = scene.patriota;
   const enemyScale = oleadaEnemySpeed(scene.state.run.oleada);
@@ -1085,18 +1108,18 @@ function updateEspanoles(scene, time) {
     const direction = towardVector(espanol.x, espanol.y, target.x, target.y);
     if (espanol.kind === "fusilero") {
       updateFusilero(scene, espanol, direction, time, enemyScale);
-      continue;
-    }
-    if (espanol.kind === "jinete") {
+    } else if (espanol.kind === "jinete") {
       updateJinete(espanol, direction, time, enemyScale);
-      continue;
+    } else {
+      espanol.body.setVelocity(
+        direction.x * LANCERO_SPEED * enemyScale,
+        direction.y * LANCERO_SPEED * enemyScale,
+      );
+      espanol.facing = nextFacing(espanol.facing, direction);
+      espanol.setRotation(facingRotation(espanol.facing));
+      espanol.moving = true;
     }
-    espanol.body.setVelocity(
-      direction.x * LANCERO_SPEED * enemyScale,
-      direction.y * LANCERO_SPEED * enemyScale,
-    );
-    espanol.facing = nextFacing(espanol.facing, direction);
-    espanol.setRotation(facingRotation(espanol.facing));
+    march(espanol, espanol.kind, time, espanol.moving !== false);
   }
 }
 
@@ -1105,6 +1128,7 @@ function updateEspanoles(scene, time) {
 function updateJinete(jinete, direction, time, speedScale) {
   const enemyScale = speedScale || 1;
   const tick = jineteTick(jinete, time);
+  jinete.moving = !tick.stunned;
   // Se empina: se detiene en seco, sin perseguir al Patriota que huye.
   if (tick.stunned) {
     jinete.body.setVelocity(0, 0);
@@ -1128,6 +1152,7 @@ function updateFusilero(scene, fusilero, direction, time, speedScale) {
     scene.patriota.y - fusilero.y,
   );
   const planted = distance <= FUSILERO_RANGE;
+  fusilero.moving = !planted;
 
   fusilero.body.setVelocity(
     planted ? 0 : direction.x * approach,
@@ -1257,6 +1282,12 @@ function updatePatriota(scene, time) {
 
   run.facing = nextFacing(run.facing, vector);
   scene.patriota.setRotation(facingRotation(run.facing));
+  march(
+    scene.patriota,
+    "patriota",
+    time,
+    vector.x !== 0 || vector.y !== 0 || time < run.knockUntil,
+  );
 
   const invulnerable = isInvulnerable(time, run.invulnerableUntil);
   scene.patriota.setVisible(!invulnerable || blinkVisible(time));
@@ -1715,6 +1746,8 @@ function makeFont(scene) {
       charsPerRow: FONT_COLUMNS,
     }),
   );
+  // Sin NEAREST el escalado de la fuente de 5x7 sale borroso en WebGL.
+  scene.textures.get("pixfont").setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
 
 // Todo texto del juego nace aquí: mayúsculas, tinte y escala del tipo arcade.
@@ -1760,55 +1793,60 @@ function createHearts(scene) {
 function createHud(scene) {
   scene.hud = { livesShown: LIVES_TOTAL };
 
-  // Franja de cuero oscuro tras los elementos marcados.
+  // Franja superior de dos filas: puntos/vidas/oleada arriba y el medidor de
+  // la Piedra abajo, con panel propio y filo de oro.
   scene.add
-    .rectangle(GAME_WIDTH / 2, 24, GAME_WIDTH, 48, backdrop, 0.62)
+    .rectangle(GAME_WIDTH / 2, 34, GAME_WIDTH, 68, backdrop, 0.62)
     .setDepth(9);
   scene.add
-    .rectangle(GAME_WIDTH / 2, 48, GAME_WIDTH, 2, accent, 0.35)
+    .rectangle(GAME_WIDTH / 2, 68, GAME_WIDTH, 2, accent, 0.35)
     .setDepth(9);
 
-  scene.hud.score = pixText(scene, 16, 24, "PUNTOS 0000", 3, accent, 0, 0.5).setDepth(10);
+  scene.hud.score = pixText(scene, 16, 22, "PUNTOS 0000", 3, accent, 0, 0.5).setDepth(10);
 
   // Tres corazones: llenos son vidas; vacíos, recuerdan lo perdido.
   scene.hud.hearts = [0, 1, 2].map((i) =>
     scene.add
-      .image(GAME_WIDTH / 2 + (i - 1) * 27, 24, "corazonLleno")
+      .image(GAME_WIDTH / 2 + (i - 1) * 27, 22, "corazonLleno")
       .setDepth(10),
   );
 
-  scene.hud.oleada = pixText(scene, GAME_WIDTH - 16, 24, "OLEADA 01", 3, patriota, 1, 0.5).setDepth(10);
+  scene.hud.oleada = pixText(scene, GAME_WIDTH - 16, 22, "OLEADA 01", 3, patriota, 1, 0.5).setDepth(10);
 
   scene.hud.status = pixText(scene, GAME_WIDTH / 2, GAME_HEIGHT - 16, "", 2, patriota).setDepth(10);
 
-  // Medidor de la Piedra: panel de cuero con rótulo, icono de roca y barra
-  // segmentada; lista, ¡PIEDRA LISTA! parpadea y el panel se rodea de oro vivo.
-  scene.hud.piedraPanel = scene.add
-    .rectangle(118, 62, 216, 40, leather, 0.88)
-    .setStrokeStyle(2, frame, 1)
+  // Medidor de la Piedra: una fila entera del HUD, con la roca en su anillo de
+  // latón, la barra teal segmentada y un marco de oro que late al quedar lista.
+  scene.add
+    .rectangle(GAME_WIDTH / 2, 52, 776, 28, leather, 0.9)
+    .setStrokeStyle(2, tealDark, 1)
     .setDepth(9);
   scene.hud.piedraGlow = scene.add
-    .rectangle(118, 62, 220, 44)
+    .rectangle(GAME_WIDTH / 2, 52, 780, 32)
     .setStrokeStyle(3, accent)
     .setDepth(9)
     .setVisible(false);
-  scene.hud.piedraIcon = scene.add.image(30, 62, "piedra").setScale(PIEDRA_ICON_SCALE).setDepth(10);
-  scene.hud.piedraLabel = pixText(scene, 54, 50, "PIEDRA", 2, dim, 0, 0.5).setDepth(10);
+  scene.add
+    .circle(30, 52, 16, cell, 0.95)
+    .setStrokeStyle(2, accent, 0.9)
+    .setDepth(10);
+  scene.hud.piedraIcon = scene.add.image(30, 52, "piedra").setScale(PIEDRA_ICON_SCALE).setDepth(11);
+  scene.hud.piedraLabel = pixText(scene, 54, 52, "PIEDRA", 2, dim, 0, 0.5).setDepth(10);
   scene.hud.piedraBarBg = scene.add
-    .rectangle(133, 66, PIEDRA_BAR + 8, 14, cell, 1)
-    .setStrokeStyle(2, frame, 1)
+    .rectangle(136 + PIEDRA_BAR / 2, 52, PIEDRA_BAR + 8, 16, cell, 1)
+    .setStrokeStyle(2, tealDark, 1)
     .setDepth(10);
   scene.hud.piedraFill = scene.add
-    .rectangle(56, 66, PIEDRA_BAR, 9, accent)
+    .rectangle(136, 52, PIEDRA_BAR, 8, teal)
     .setOrigin(0, 0.5)
     .setDepth(10);
   scene.hud.piedraTicks = [0.25, 0.5, 0.75].map((mark) =>
     scene.add
-      .rectangle(56 + PIEDRA_BAR * mark, 66, 1.5, 9, frame, 0.65)
+      .rectangle(136 + PIEDRA_BAR * mark, 52, 1.5, 8, frame, 0.65)
       .setDepth(10),
   );
 
-  scene.hud.piedraReady = pixText(scene, 56, 66, "¡PIEDRA LISTA!", 2, accent, 0, 0.5)
+  scene.hud.piedraReady = pixText(scene, 136 + PIEDRA_BAR / 2, 52, "¡PIEDRA LISTA! B3", 2, accent)
     .setDepth(10)
     .setVisible(false);
   scene.hud.piedraGlowShown = false;
@@ -1839,7 +1877,7 @@ function updatePiedraHud(scene, tick) {
   const fill = Math.max(0, Math.min(1, tick.progress / PIEDRA_STEP));
   hud.piedraBarBg.setVisible(!ready);
   hud.piedraFill.setVisible(!ready);
-  hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 2), 9);
+  hud.piedraFill.setDisplaySize(Math.max(fill * PIEDRA_BAR, 2), 8);
   hud.piedraReady.setVisible(ready);
   // Los adornos del medidor nacen en createHud; el afino aquí los respeta
   // cuando están (paneles, rótulo y marco de oro latiendo al quedar lista).
@@ -2200,7 +2238,7 @@ function createStartScreen(scene) {
     ["JUGAR", "MEJORES PUNTUAJES", "¿CONTROLES?"],
     236,
     48,
-    300,
+    330,
   );
 
   c.add(pixText(scene, GAME_WIDTH / 2, 400, "MEJORES PUNTUAJES", 3, accent));
@@ -2219,7 +2257,7 @@ function createMenuButtons(scene, container, labels, yStart, yStep, width) {
     const y = yStart + i * yStep;
     const label = pixText(scene, GAME_WIDTH / 2, y, labels[i], 3, patriota);
     // La caja se ajusta al rótulo: ningún texto cuelga fuera de su botón.
-    const bgWidth = Math.max(width, Math.ceil(label.width) * 3 + 32);
+    const bgWidth = Math.max(width, Math.ceil(label.width) + 32);
     const bg = scene.add.rectangle(
       GAME_WIDTH / 2,
       y,
@@ -2500,23 +2538,29 @@ function createEndGameUi(scene) {
 
   scene.endGame.leaderboardTitle = pixText(scene, GAME_WIDTH / 2, 288, "MEJORES PUNTUAJES", 3, accent);
 
-  scene.endGame.leaderboard = pixText(scene, GAME_WIDTH / 2, 308, "", 2, patriota, 0.5, 0);
-  scene.endGame.leaderboard.lineSpacing = 4;
+  scene.endGame.leaderboard = pixText(scene, GAME_WIDTH / 2, 304, "", 2, patriota, 0.5, 0);
+  scene.endGame.leaderboard.lineSpacing = 0;
 
   scene.endGame.gridLabels = [];
   for (let row = 0; row < LETTER_GRID.length; row += 1) {
     const rowValues = LETTER_GRID[row];
-    const rowWidth = rowValues.length * 58;
+    const widths = rowValues.map((value) => (value.length > 1 ? 96 : 42));
+    const gap = 16;
+    const rowWidth =
+      widths.reduce((sum, width) => sum + width, 0) + gap * (widths.length - 1);
+    let cursor = GAME_WIDTH / 2 - rowWidth / 2;
     for (let col = 0; col < rowValues.length; col += 1) {
       const value = rowValues[col];
-      const cellX = GAME_WIDTH / 2 - rowWidth / 2 + 29 + col * 58;
+      const width = widths[col];
+      const cellX = cursor + width / 2;
+      cursor += width + gap;
       const cellY = 412 + row * 30;
       const wide = value.length > 1;
 
       const slate = scene.add.rectangle(
         cellX,
         cellY,
-        wide ? 96 : 42,
+        width,
         26,
         cell,
         0.95,
@@ -2889,6 +2933,7 @@ function tone(ctx, out, freq, t, len, type, vol) {
   g.connect(out);
   osc.start(t);
   osc.stop(t + len + 0.02);
+  osc.onended = () => g.disconnect();
 }
 
 function kickDrum(ctx, out, t) {
@@ -2903,6 +2948,7 @@ function kickDrum(ctx, out, t) {
   g.connect(out);
   osc.start(t);
   osc.stop(t + 0.14);
+  osc.onended = () => g.disconnect();
 }
 
 function hatTick(ctx, out, t, noise) {
@@ -2919,6 +2965,7 @@ function hatTick(ctx, out, t, noise) {
   g.connect(out);
   src.start(t);
   src.stop(t + 0.06);
+  src.onended = () => g.disconnect();
 }
 
 // La caja militar: chasquido de parche con banda centrada, seco y marcial.
@@ -2937,6 +2984,7 @@ function snareDrum(ctx, out, t, noise) {
   g.connect(out);
   src.start(t);
   src.stop(t + 0.09);
+  src.onended = () => g.disconnect();
 }
 
 function stopMusic(scene) {
@@ -3021,6 +3069,11 @@ function startMusic(scene, kind, delaySec) {
     if (gen !== scene.state.audioGen) {
       return;
     }
+    // Si el reloj de la escena se durmió (pestaña oculta, tirón del hilo), el
+    // compás quedaba agendado en el pasado: Web Audio lo arrancaba y paraba a
+    // la vez, en silencio, y el retraso se arrastraba para siempre. Aquí se
+    // reengancha al reloj de audio.
+    audioTime = Math.max(audioTime, ctx.currentTime + 0.03);
     for (let i = 0; i < 8; i += 1) {
       const step = bar * 8 + i;
       const at = audioTime + i * track.step;
@@ -3055,9 +3108,10 @@ function startMusic(scene, kind, delaySec) {
         }
       }
     }
-    // La barra siguiente ya está en el reloj de audio: aunque el navegador
-    // estrangule los callbacks, el compás no se corta ni se atrasa.
-    scene.time.delayedCall(barMs, () =>
+    // La barra siguiente ya está en el reloj de audio y se agenda con
+    // antelación: aunque el navegador estrangule los callbacks, el compás no
+    // se corta ni se atrasa.
+    scene.time.delayedCall(barMs - 120, () =>
       scheduleBar(bar + 1, audioTime + track.step * 8),
     );
   };
@@ -3132,22 +3186,21 @@ function playSound(scene, type) {
     gain.connect(ctx.destination);
 
     const now = ctx.currentTime;
+    let end = 0;
     if (type === "click") {
       osc.type = "square";
       osc.frequency.setValueAtTime(1200, now);
       osc.frequency.exponentialRampToValueAtTime(600, now + 0.04);
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      osc.start(now);
-      osc.stop(now + 0.05);
+      end = 0.05;
     } else if (type === "select") {
       osc.type = "square";
       osc.frequency.setValueAtTime(700, now);
       osc.frequency.exponentialRampToValueAtTime(1400, now + 0.08);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      osc.start(now);
-      osc.stop(now + 0.1);
+      end = 0.1;
     } else if (type === "oleada") {
       osc.type = "square";
       osc.frequency.setValueAtTime(523, now);
@@ -3155,8 +3208,7 @@ function playSound(scene, type) {
       osc.frequency.setValueAtTime(784, now + 0.18);
       gain.gain.setValueAtTime(0.14, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
-      osc.start(now);
-      osc.stop(now + 0.34);
+      end = 0.34;
     } else if (type === "bonus") {
       osc.type = "triangle";
       osc.frequency.setValueAtTime(784, now);
@@ -3164,88 +3216,77 @@ function playSound(scene, type) {
       osc.frequency.setValueAtTime(1175, now + 0.16);
       gain.gain.setValueAtTime(0.14, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
+      end = 0.3;
     } else if (type === "shot") {
       osc.type = "square";
       osc.frequency.setValueAtTime(920, now);
       osc.frequency.exponentialRampToValueAtTime(160, now + 0.07);
       gain.gain.setValueAtTime(0.09, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-      osc.start(now);
-      osc.stop(now + 0.09);
+      end = 0.09;
     } else if (type === "aim") {
       osc.type = "square";
       osc.frequency.setValueAtTime(280, now);
       osc.frequency.exponentialRampToValueAtTime(840, now + 0.3);
       gain.gain.setValueAtTime(0.05, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-      osc.start(now);
-      osc.stop(now + 0.32);
+      end = 0.32;
     } else if (type === "musket") {
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(240, now);
       osc.frequency.exponentialRampToValueAtTime(55, now + 0.2);
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-      osc.start(now);
-      osc.stop(now + 0.22);
+      end = 0.22;
     } else if (type === "deflect") {
       osc.type = "square";
       osc.frequency.setValueAtTime(1500, now);
       osc.frequency.exponentialRampToValueAtTime(2600, now + 0.08);
       gain.gain.setValueAtTime(0.09, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      osc.start(now);
-      osc.stop(now + 0.1);
+      end = 0.1;
     } else if (type === "sable") {
       osc.type = "triangle";
       osc.frequency.setValueAtTime(1500, now);
       osc.frequency.exponentialRampToValueAtTime(280, now + 0.13);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      osc.start(now);
-      osc.stop(now + 0.15);
+      end = 0.15;
     } else if (type === "hit") {
       osc.type = "square";
       osc.frequency.setValueAtTime(500, now);
       osc.frequency.exponentialRampToValueAtTime(220, now + 0.05);
       gain.gain.setValueAtTime(0.07, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-      osc.start(now);
-      osc.stop(now + 0.06);
+      end = 0.06;
     } else if (type === "kill") {
       osc.type = "triangle";
       osc.frequency.setValueAtTime(300, now);
       osc.frequency.exponentialRampToValueAtTime(60, now + 0.16);
       gain.gain.setValueAtTime(0.14, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      osc.start(now);
-      osc.stop(now + 0.18);
+      end = 0.18;
     } else if (type === "hurt") {
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(440, now);
       osc.frequency.exponentialRampToValueAtTime(90, now + 0.22);
       gain.gain.setValueAtTime(0.16, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-      osc.start(now);
-      osc.stop(now + 0.24);
+      end = 0.24;
     } else if (type === "piedraThrow") {
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(320, now);
       osc.frequency.linearRampToValueAtTime(70, now + 0.28);
       gain.gain.setValueAtTime(0.22, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
+      end = 0.3;
     } else if (type === "crush") {
       osc.type = "square";
       osc.frequency.setValueAtTime(180, now);
       osc.frequency.exponentialRampToValueAtTime(45, now + 0.14);
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-      osc.start(now);
-      osc.stop(now + 0.16);
+      end = 0.16;
     } else if (type === "listo") {
       osc.type = "square";
       osc.frequency.setValueAtTime(660, now);
@@ -3253,8 +3294,7 @@ function playSound(scene, type) {
       osc.frequency.setValueAtTime(1100, now + 0.2);
       gain.gain.setValueAtTime(0.12, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
-      osc.start(now);
-      osc.stop(now + 0.34);
+      end = 0.34;
     } else if (type === "defeat") {
       // Pito de corneta que se rinde: A → F → D → A y caída final.
       osc.type = "sawtooth";
@@ -3266,8 +3306,12 @@ function playSound(scene, type) {
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.setValueAtTime(0.16, now + 0.6);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+      end = 1.05;
+    }
+    if (end > 0) {
       osc.start(now);
-      osc.stop(now + 1.05);
+      osc.stop(now + end);
+      osc.onended = () => gain.disconnect();
     }
   } catch (_) {}
 }
