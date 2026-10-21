@@ -1,6 +1,6 @@
 {
   "name": "platanus-hack-26-arcade",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Phaser arcade game challenge starter kit",
   "type": "module",
   "scripts": {

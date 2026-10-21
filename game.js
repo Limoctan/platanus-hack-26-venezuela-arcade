@@ -433,6 +433,7 @@ function createStage(scene) {
       rng.integerInRange(10, 22),
       rng.integerInRange(6, 12),
     );
+
     g.fillStyle(oliveDark, 0.7);
     g.fillEllipse(
       spot.x + 3,
